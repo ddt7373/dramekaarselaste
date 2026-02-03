@@ -1,5 +1,3 @@
-# React + TypeScript + Vite
+# DraMekaarSeLaste
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-"# dramekaarselaste" 
-"# dramekaarselaste" 
+React + TypeScript + Vite. NHKA web-app.
