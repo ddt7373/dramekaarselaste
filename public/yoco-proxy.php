@@ -8,7 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-$YOCO_SECRET_KEY = 'sk_live_cf767a9dDLa6Grz554245dcb5c82';
+$YOCO_SECRET_KEY = getenv('YOCO_SECRET_KEY') ?: '';
 
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);

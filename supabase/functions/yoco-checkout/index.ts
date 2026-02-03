@@ -1,5 +1,4 @@
-const YOCO_SECRET_KEY = 'sk_live_cf767a9dDLa6Grz554245dcb5c82'; // Provided by user
-// Note: In production, best practice is to use Deno.env.get('YOCO_SECRET_KEY')
+const YOCO_SECRET_KEY = Deno.env.get('YOCO_SECRET_KEY') ?? '';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
