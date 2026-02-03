@@ -1,0 +1,8 @@
+{
+    "amount": 1000,
+    "currency": "ZAR",
+    "metadata": {},
+    "successUrl": "http://localhost:3000/success",
+    "cancelUrl": "http://localhost:3000/cancel",
+    "failureUrl": "http://localhost:3000/failure"
+}
