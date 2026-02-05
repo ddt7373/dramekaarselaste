@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNHKA } from '@/contexts/NHKAContext';
-import { supabase } from '@/lib/supabase';
-import { 
-  getBetalingTipeLabel, 
+import {
+  getBetalingTipeLabel,
   getBetalingStatusLabel,
   BetalingTipe,
   GemeenteBankbesonderhede
 } from '@/types/nhka';
-import { 
+import {
   CreditCard,
   Heart,
   Gift,
@@ -21,7 +20,8 @@ import {
   ArrowRight,
   Building2,
   Copy,
-  Check
+  Check,
+  GraduationCap
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,8 +34,8 @@ const Betaling: React.FC = () => {
     return num.toFixed(2);
   };
 
-  const { 
-    currentUser, 
+  const {
+    currentUser,
     currentGemeente,
     betalings,
     processBetaling,
@@ -105,7 +105,7 @@ const Betaling: React.FC = () => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const paymentStatus = urlParams.get('payment');
-    
+
     if (paymentStatus === 'success') {
       toast.success('Betaling suksesvol voltooi! Dankie vir jou bydrae.');
       window.history.replaceState({}, '', window.location.pathname);
@@ -122,7 +122,7 @@ const Betaling: React.FC = () => {
 
   // Get user's payments
   const userBetalings = betalings.filter(b => b.gebruiker_id === currentUser.id);
-  
+
   // Quick amount buttons
   const quickAmounts = [50, 100, 200, 500, 1000];
 
@@ -146,7 +146,7 @@ const Betaling: React.FC = () => {
       }
       return;
     }
-    
+
     const amount = parseFloat(bedrag);
     if (isNaN(amount) || amount < 10) {
       toast.error('Minimum bedrag is R10');
@@ -162,7 +162,7 @@ const Betaling: React.FC = () => {
 
     try {
       const result = await processBetaling(amount, tipe as import('@/types/nhka').BetalingTipe, beskrywing);
-      
+
       if (result.success && result.redirectUrl) {
         window.location.href = result.redirectUrl;
       } else {
@@ -367,15 +367,13 @@ const Betaling: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setTipe('offergawe')}
-                    className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${
-                      tipe === 'offergawe'
-                        ? 'border-[#D4A84B] bg-[#D4A84B]/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                    className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${tipe === 'offergawe'
+                      ? 'border-[#D4A84B] bg-[#D4A84B]/5'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
                   >
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      tipe === 'offergawe' ? 'bg-[#D4A84B]' : 'bg-gray-100'
-                    }`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${tipe === 'offergawe' ? 'bg-[#D4A84B]' : 'bg-gray-100'
+                      }`}>
                       <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${tipe === 'offergawe' ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div className="text-left min-w-0">
@@ -385,19 +383,17 @@ const Betaling: React.FC = () => {
                       <p className="text-xs text-gray-500 truncate">Weeklikse/Maandelikse offer</p>
                     </div>
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={() => setTipe('ander')}
-                    className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${
-                      tipe === 'ander'
-                        ? 'border-[#D4A84B] bg-[#D4A84B]/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                    className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${tipe === 'ander'
+                      ? 'border-[#D4A84B] bg-[#D4A84B]/5'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
                   >
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      tipe === 'ander' ? 'bg-[#D4A84B]' : 'bg-gray-100'
-                    }`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${tipe === 'ander' ? 'bg-[#D4A84B]' : 'bg-gray-100'
+                      }`}>
                       <Gift className={`w-4 h-4 sm:w-5 sm:h-5 ${tipe === 'ander' ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div className="text-left min-w-0">
@@ -410,15 +406,13 @@ const Betaling: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setTipe('kiog')}
-                    className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${
-                      tipe === 'kiog'
-                        ? 'border-amber-500 bg-amber-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                    className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${tipe === 'kiog'
+                      ? 'border-amber-500 bg-amber-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
                   >
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      tipe === 'kiog' ? 'bg-amber-500' : 'bg-gray-100'
-                    }`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${tipe === 'kiog' ? 'bg-amber-500' : 'bg-gray-100'
+                      }`}>
                       <GraduationCap className={`w-4 h-4 sm:w-5 sm:h-5 ${tipe === 'kiog' ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div className="text-left min-w-0">
@@ -468,7 +462,7 @@ const Betaling: React.FC = () => {
               {/* Amount */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 sm:mb-3">Bedrag (ZAR)</label>
-                
+
                 {/* Quick Amount Buttons */}
                 <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3">
                   {quickAmounts.map(amount => (
@@ -476,11 +470,10 @@ const Betaling: React.FC = () => {
                       key={amount}
                       type="button"
                       onClick={() => setBedrag(amount.toString())}
-                      className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-sm transition-colors ${
-                        bedrag === amount.toString()
-                          ? 'bg-[#002855] text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-sm transition-colors ${bedrag === amount.toString()
+                        ? 'bg-[#002855] text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                     >
                       R{amount}
                     </button>
@@ -553,9 +546,8 @@ const Betaling: React.FC = () => {
                     <div key={betaling.id} className="p-3 sm:p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
-                          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            betaling.tipe === 'offergawe' ? 'bg-[#D4A84B]/10' : 'bg-[#8B7CB3]/10'
-                          }`}>
+                          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${betaling.tipe === 'offergawe' ? 'bg-[#D4A84B]/10' : 'bg-[#8B7CB3]/10'
+                            }`}>
                             {betaling.tipe === 'offergawe' ? (
                               <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#D4A84B]" />
                             ) : (
@@ -610,7 +602,7 @@ const Betaling: React.FC = () => {
           <div className="mt-3 sm:mt-4 bg-[#002855]/5 rounded-xl p-3 sm:p-4">
             <h4 className="font-semibold text-sm sm:text-base text-[#002855] mb-1 sm:mb-2">Oor Bydraes</h4>
             <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-              Jou bydraes help om die gemeente se bediening te ondersteun. 
+              Jou bydraes help om die gemeente se bediening te ondersteun.
               Alle betalings word veilig verwerk en 'n rekord word gehou vir jou verwysing.
             </p>
           </div>

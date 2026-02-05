@@ -3,10 +3,14 @@ import { NHKAProvider, useNHKA } from '@/contexts/NHKAContext';
 import { OfflineProvider, useOffline } from '@/contexts/OfflineContext';
 import { isHoofAdmin, isModerator } from '@/types/nhka';
 import InstallPrompt from '@/components/InstallPrompt';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // Import all NHKA components
 import Header from '@/components/nhka/Header';
 import Sidebar from '@/components/nhka/Sidebar';
+import LifeWorshipHub from '@/components/nhka/hubs/LifeWorshipHub';
+import CommunityCareHub from '@/components/nhka/hubs/CommunityCareHub';
+import GovernanceStewardshipHub from '@/components/nhka/hubs/GovernanceStewardshipHub';
 import GemeenteSelect from '@/components/nhka/GemeenteSelect';
 import GemeenteRegister from '@/components/nhka/GemeenteRegister';
 import UserRegister from '@/components/nhka/UserRegister';
@@ -214,6 +218,12 @@ const AppContent: React.FC = () => {
     switch (currentView) {
       case 'dashboard':
         return <Dashboard />;
+      case 'worship-hub':
+        return <LifeWorshipHub />;
+      case 'community-hub':
+        return <CommunityCareHub />;
+      case 'stewardship-hub':
+        return <GovernanceStewardshipHub />;
       case 'my-wyk':
         return <MyWyk />;
       case 'gemeente-kaart':
@@ -310,21 +320,40 @@ const AppContent: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen bg-background relative overflow-hidden font-sans">
+      {/* Sacred Foundation Elements */}
+      <div className="paper-texture" />
+
       {/* Header */}
       <Header onMenuToggle={handleMenuToggle} onNavigate={handleHeaderNavigate} />
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 relative z-10">
         {/* Sidebar */}
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          className="glass-panel border-r border-primary/10"
+        />
 
-        {/* Main Content */}
-        <main className={`flex-1 min-h-0 p-4 md:p-6 lg:p-8 w-full overflow-y-auto ${currentView === 'geloofsonderrig' ? 'geloofsonderrig-onderwerpe-scroll' : 'max-w-6xl mx-auto'}`}>
-          {renderView()}
+        {/* Main Content Area */}
+        <main className={`flex-1 min-h-0 overflow-y-auto relative ${currentView === 'geloofsonderrig' ? 'geloofsonderrig-onderwerpe-scroll' : ''}`}>
+          <div className={currentView !== 'geloofsonderrig' ? 'sacred-container' : 'h-full'}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentView}
+                initial={{ opacity: 0, scale: 0.98, y: 10, filter: 'blur(10px)' }}
+                animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, scale: 1.02, y: -10, filter: 'blur(10px)' }}
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {renderView()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </main>
       </div>
 
-      {/* Offline Indicator */}
+      {/* Offline Indicator & Overlays */}
       <InstallPrompt />
       <OfflineIndicator />
 
@@ -337,23 +366,27 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-100 py-6 mt-8">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full overflow-hidden">
+      <footer className="glass-panel border-t border-primary/10 py-10 mt-12 relative z-20">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <motion.div
+              whileHover={{ scale: 1.1, rotate: 5 }}
+              className="w-12 h-12 rounded-full overflow-hidden shadow-lg bg-white p-1"
+            >
               <img
                 src={LOGO_URL}
                 alt="Logo"
                 className="w-full h-full object-contain"
               />
-            </div>
-            <span className="font-semibold text-[#002855]">Dra Mekaar se Laste</span>
+            </motion.div>
+            <span className="font-serif text-2xl font-bold tracking-tight text-primary uppercase">Dra Mekaar se Laste</span>
           </div>
-          <p className="text-sm text-gray-500">
-            © {new Date().getFullYear()} Nederduitsch Hervormde Kerk van Afrika
+          <div className="h-px w-24 bg-accent/30 mx-auto mb-6" />
+          <p className="text-sm text-foreground/60 font-medium tracking-wide italic mb-2">
+            "Dra mekaar se laste en vervul so die wet van Christus"
           </p>
-          <p className="text-xs text-gray-400 mt-1">
-            "Dra mekaar se laste en vervul so die wet van Christus" — Galasiërs 6:2
+          <p className="text-xs text-foreground/40 font-bold uppercase tracking-[0.2em]">
+            Galasiërs 6:2 — NHKA © {new Date().getFullYear()}
           </p>
         </div>
       </footer>

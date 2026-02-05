@@ -658,6 +658,9 @@ export const getGroepTipeLabel = (tipe: GroepTipe): string => {
 
 export type AppView =
   | 'dashboard'
+  | 'worship-hub'
+  | 'community-hub'
+  | 'stewardship-hub'
   | 'my-wyk'
   | 'profiel'
   | 'pastorale-aksie'

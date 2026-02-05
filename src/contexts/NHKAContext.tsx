@@ -31,6 +31,8 @@ interface NHKAContextType {
   // Navigation
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
+  goBack: () => void;
+  navigationStack: AppView[];
 
   // Language
   language: 'af' | 'en';
@@ -129,7 +131,37 @@ export const useNHKA = () => {
 export const NHKAProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUserState] = useState<Gebruiker | null>(null);
   const [currentGemeente, setCurrentGemeenteState] = useState<Gemeente | null>(null);
-  const [currentView, setCurrentView] = useState<AppView>('gemeente-select');
+  const [currentView, setCurrentViewInternal] = useState<AppView>('gemeente-select');
+  const [navigationStack, setNavigationStack] = useState<AppView[]>([]);
+
+  const setCurrentView = (view: AppView) => {
+    // If we're going to the root/dashboard, clear the stack
+    if (view === 'dashboard' || view === 'gemeente-select' || view === 'login') {
+      setNavigationStack([]);
+    } else if (view !== currentView) {
+      // Avoid pushing the same view twice or pushing the login/select screens
+      const previousView = currentView;
+      if (previousView !== 'login' && previousView !== 'gemeente-select' && !navigationStack.includes(view)) {
+        setNavigationStack(prev => [...prev, previousView]);
+      }
+    }
+    setCurrentViewInternal(view);
+  };
+
+  const goBack = () => {
+    if (navigationStack.length > 0) {
+      const newStack = [...navigationStack];
+      const prevView = newStack.pop();
+      setNavigationStack(newStack);
+      if (prevView) {
+        setCurrentViewInternal(prevView);
+      }
+    } else {
+      // Fallback if stack is empty but we want to go back
+      setCurrentViewInternal('dashboard');
+    }
+  };
+
   const [loading, setLoading] = useState(true);
   const [sessionRestored, setSessionRestored] = useState(false);
 
@@ -1355,6 +1387,8 @@ export const NHKAProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isLoggedIn,
         currentView,
         setCurrentView,
+        goBack,
+        navigationStack,
 
         // Language
         language,
