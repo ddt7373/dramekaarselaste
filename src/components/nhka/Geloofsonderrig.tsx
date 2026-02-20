@@ -2439,6 +2439,22 @@ const Geloofsonderrig: React.FC = () => {
       if (!error) {
         await fetchVordering();
         fetchLeaderboard();
+        // Sodat KGVW-analise (Leerders in Klas) hierdie les tel: as die leerder nog geen ai_logs vir hierdie les het, voeg een "les voltooi"-log by.
+        const { data: bestaande } = await supabase
+          .from('geloofsonderrig_ai_logs')
+          .select('id')
+          .eq('leerder_id', currentUser.id)
+          .eq('les_id', selectedLes.id)
+          .limit(1);
+        if (!bestaande?.length) {
+          await supabase.from('geloofsonderrig_ai_logs').insert({
+            leerder_id: currentUser.id,
+            les_id: selectedLes.id,
+            user_message: language === 'af' ? 'Les voltooi' : 'Lesson completed',
+            ai_response: '',
+            kgvw_scores: { kennis: 0.25, gesindheid: 0.25, vaardigheid: 0.25, values: 0.25 }
+          });
+        }
       }
     }
 

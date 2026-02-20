@@ -86,4 +86,9 @@ As jy 'n **ander** musiek API het (bv. Udio, MusicAPI.ai, Beatoven), stuur my:
 
 1. Kry jou Suno API-sleutel (Stap 1–2 hierbo)
 2. Voeg dit by Supabase Secrets as `SUNO_API_KEY`
-3. Laat my weet – ek sal die `geloofsonderrig-ai` Edge Function opdateer om Suno te gebruik vir musiek-generasie (in plaas van ABC-notasie)
+3. Deploy jou funksies:
+   - Maak jou terminal oop
+   - Tik: `npx supabase functions deploy musiek-ai --no-verify-jwt`
+   - Tik: `npx supabase functions deploy geloofsonderrig-ai --no-verify-jwt`
+
+Beide `musiek-ai` (vir die musiek-afdeling) en `geloofsonderrig-ai` (vir die les-beloning) gebruik nou dieselfde **Suno API (sunoapi.org)** en dieselfde `SUNO_API_KEY`.

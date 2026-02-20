@@ -12,10 +12,12 @@ import {
   CheckCircle,
   AlertCircle,
   Archive,
-  X
+  X,
+  CopyMinus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -36,7 +38,31 @@ const OmsendbriefPortaal: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const allIds = dokumente.map((d) => d.id);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
+  const someSelected = selectedIds.size > 0;
+
+  /** Groepeer volgens filename (kleinletters); vir elke groep met duplikate behou ons die nuutste (grootste created_at) en verwyder die oudstes. */
+  const duplicateIdsToRemove = React.useMemo(() => {
+    const byName = new Map<string, OmsendbriefDokument[]>();
+    for (const d of dokumente) {
+      const key = d.filename.trim().toLowerCase();
+      if (!byName.has(key)) byName.set(key, []);
+      byName.get(key)!.push(d);
+    }
+    const ids: string[] = [];
+    for (const [, group] of byName) {
+      if (group.length <= 1) continue;
+      const sorted = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      for (let i = 0; i < sorted.length - 1; i++) ids.push(sorted[i].id);
+    }
+    return ids;
+  }, [dokumente]);
+  const hasDuplicates = duplicateIdsToRemove.length > 0;
 
   const fetchDokumente = async () => {
     try {
@@ -157,14 +183,17 @@ const OmsendbriefPortaal: React.FC = () => {
           if (docErr) throw docErr;
 
           let originalFileUrl = '';
+          let storagePath = '';
           if (rawFile) {
-            const storagePath = `${doc.id}/${filename}`;
+            storagePath = `${doc.id}/${filename}`;
             const { error: uploadErr } = await supabase.storage
               .from('omsendbrief-dokumente')
               .upload(storagePath, rawFile, { upsert: true });
             if (!uploadErr) {
               const { data: urlData } = supabase.storage.from('omsendbrief-dokumente').getPublicUrl(storagePath);
               originalFileUrl = urlData?.publicUrl || '';
+              // Store storage_path so the chatbot can download the original file
+              await supabase.from('omsendbrief_dokumente').update({ storage_path: storagePath }).eq('id', doc.id);
             }
           }
 
@@ -202,13 +231,89 @@ const OmsendbriefPortaal: React.FC = () => {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) setSelectedIds(new Set(allIds));
+    else setSelectedIds(new Set());
+  };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm('Is jy seker jy wil hierdie dokument verwyder?')) return;
     const { error } = await supabase.from('omsendbrief_dokumente').delete().eq('id', id);
     if (error) toast.error(error.message);
     else {
       toast.success('Dokument verwyder');
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       fetchDokumente();
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const msg =
+      ids.length === 1
+        ? 'Is jy seker jy wil hierdie dokument verwyder?'
+        : `Is jy seker jy wil ${ids.length} dokumente verwyder?`;
+    if (!window.confirm(msg)) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('omsendbrief_dokumente').delete().in('id', ids);
+      if (error) throw error;
+      toast.success(ids.length === 1 ? 'Dokument verwyder' : `${ids.length} dokumente verwyder`);
+      setSelectedIds(new Set());
+      await fetchDokumente();
+    } catch (err: any) {
+      toast.error(err.message || 'Kon nie dokumente verwyder nie');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (dokumente.length === 0) return;
+    if (!window.confirm(`Is jy seker jy wil al ${dokumente.length} dokumente verwyder? Dit kan nie ongedaan gemaak word nie.`)) return;
+    setDeleting(true);
+    try {
+      const ids = dokumente.map((d) => d.id);
+      const { error } = await supabase.from('omsendbrief_dokumente').delete().in('id', ids);
+      if (error) throw error;
+      toast.success('Alle dokumente verwyder');
+      setSelectedIds(new Set());
+      await fetchDokumente();
+    } catch (err: any) {
+      toast.error(err.message || 'Kon nie dokumente verwyder nie');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleRemoveDuplicates = async () => {
+    if (duplicateIdsToRemove.length === 0) return;
+    if (!window.confirm(`Verwyder ${duplicateIdsToRemove.length} oudste duplikate? Die nuutste weergawe van elke lêer bly behou.`)) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('omsendbrief_dokumente').delete().in('id', duplicateIdsToRemove);
+      if (error) throw error;
+      toast.success(`${duplicateIdsToRemove.length} oudste duplikate verwyder; nuutstes behou.`);
+      setSelectedIds(new Set());
+      await fetchDokumente();
+    } catch (err: any) {
+      toast.error(err.message || 'Kon nie duplikate verwyder nie');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -264,12 +369,66 @@ const OmsendbriefPortaal: React.FC = () => {
             <p className="text-gray-500">Nog geen dokumente opgelaai nie.</p>
           ) : (
             <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-3 p-2 rounded-lg border border-gray-100 bg-gray-50/80 mb-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="omsendbrief-select-all"
+                    checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                  <label htmlFor="omsendbrief-select-all" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Kies almal
+                  </label>
+                </div>
+                {someSelected && (
+                  <span className="text-sm text-gray-500">
+                    {selectedIds.size} gekies
+                  </span>
+                )}
+                <div className="flex flex-wrap items-center gap-2 ml-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRemoveDuplicates}
+                    disabled={!hasDuplicates || deleting}
+                    className="text-amber-700 border-amber-200 hover:bg-amber-50"
+                    title="Verwyder oudste weergawes van duplikate (dieselfde lêernaam); nuutste bly."
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CopyMinus className="w-4 h-4 mr-1" />}
+                    Verwyder duplikate {hasDuplicates ? `(${duplicateIdsToRemove.length})` : ''}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteSelected}
+                    disabled={!someSelected || deleting}
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}
+                    Verwyder gekies
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteAll}
+                    disabled={deleting}
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    Verwyder almal
+                  </Button>
+                </div>
+              </div>
               {dokumente.map((d) => (
                 <div
                   key={d.id}
                   className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50"
                 >
                   <div className="flex items-center gap-3 min-w-0">
+                    <Checkbox
+                      id={`omsendbrief-doc-${d.id}`}
+                      checked={selectedIds.has(d.id)}
+                      onCheckedChange={() => toggleSelect(d.id)}
+                    />
                     <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{d.filename}</p>
@@ -281,7 +440,7 @@ const OmsendbriefPortaal: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {processing === d.id && <Loader2 className="w-4 h-4 animate-spin text-amber-500" />}
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-600">
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-600" title="Verwyder hierdie dokument">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>

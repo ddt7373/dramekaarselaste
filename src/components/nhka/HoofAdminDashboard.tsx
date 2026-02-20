@@ -37,7 +37,8 @@ import {
   CloudUpload,
   FileText,
   MessageCircle,
-  RefreshCw
+  RefreshCw,
+  Music
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -52,6 +53,7 @@ import OmsendbriefPortaal from '@/components/omsendbrief/OmsendbriefPortaal';
 import OmsendbriefAnalise from '@/components/omsendbrief/OmsendbriefAnalise';
 import { sortGemeentesWithUserFirst } from '@/constants/gemeentes';
 import { Textarea } from '@/components/ui/textarea';
+import MusiekAdmin from '@/components/musiek/MusiekAdmin';
 
 
 interface CSVLidmaat {
@@ -298,6 +300,7 @@ const HoofAdminDashboard: React.FC = () => {
   const [showMenuBuilder, setShowMenuBuilder] = useState(false);
   const [showOmsendbriefPortaal, setShowOmsendbriefPortaal] = useState(false);
   const [showOmsendbriefAnalise, setShowOmsendbriefAnalise] = useState(false);
+  const [showMusiekAdmin, setShowMusiekAdmin] = useState(false);
   const [showGeloofsonderrigTransaksies, setShowGeloofsonderrigTransaksies] = useState(false);
   const [showGeloofsonderrigLeaderboard, setShowGeloofsonderrigLeaderboard] = useState(false);
   const [refreshTransaksieKey, setRefreshTransaksieKey] = useState(0);
@@ -1422,6 +1425,19 @@ const HoofAdminDashboard: React.FC = () => {
                 <p className="text-xs md:text-sm text-gray-500">Kletsbot vrae-analise</p>
               </div>
             </button>
+
+            <button
+              onClick={() => setShowMusiekAdmin(!showMusiekAdmin)}
+              className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-400 transition-all group"
+            >
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-pink-100 flex items-center justify-center group-hover:bg-pink-200 transition-colors flex-shrink-0">
+                <Music className="w-5 h-5 md:w-6 md:h-6 text-pink-600" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-[#002855] text-sm md:text-base">Musiek Bestuur</h3>
+                <p className="text-xs md:text-sm text-gray-500">AI musiekgenerasie van liedere</p>
+              </div>
+            </button>
           </div>
         </section>
 
@@ -1598,6 +1614,19 @@ const HoofAdminDashboard: React.FC = () => {
               </button>
             </div>
             <OmsendbriefAnalise />
+          </section>
+        )}
+
+        {/* Musiek Admin Section */}
+        {showMusiekAdmin && (
+          <section className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+              <h2 className="text-xl font-bold text-[#002855]">Musiek Bestuur</h2>
+              <button onClick={() => setShowMusiekAdmin(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <MusiekAdmin />
           </section>
         )}
 

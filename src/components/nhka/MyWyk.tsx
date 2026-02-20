@@ -634,12 +634,6 @@ const MyWyk: React.FC = () => {
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <input type="text" placeholder="Soek lidmate..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#D4A84B] focus:ring-2 focus:ring-[#D4A84B]/20 outline-none" />
-      </div>
-
       {/* Dagstukkie Section */}
       {todayDagstukkie && (
         <div className="bg-[#8B7CB3]/10 border border-[#8B7CB3]/20 rounded-xl p-4 mb-6">
@@ -695,6 +689,18 @@ const MyWyk: React.FC = () => {
           <div className="flex items-center gap-2 text-pink-500"><Cake className="w-5 h-5" /><span className="text-2xl font-bold">{upcomingBirthdays.length}</span></div>
           <p className="text-xs text-gray-500 mt-1">Verjaarsdae (30 dae)</p>
         </div>
+      </div>
+
+      {/* Soek bokant lidmate */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Soek op naam of van..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 bg-white focus:border-[#D4A84B] focus:ring-2 focus:ring-[#D4A84B]/20 outline-none"
+        />
       </div>
 
       {/* Members List */}

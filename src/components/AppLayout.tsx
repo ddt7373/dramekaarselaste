@@ -17,6 +17,7 @@ import MyWyk from '@/components/nhka/MyWyk';
 import Profiel from '@/components/nhka/Profiel';
 import PastoraleAksie from '@/components/nhka/PastoraleAksie';
 import KrisisVerslag from '@/components/nhka/KrisisVerslag';
+import KrisisBestuur from '@/components/nhka/KrisisBestuur';
 import GemeenteProgram from '@/components/nhka/GemeenteProgram';
 import Vrae from '@/components/nhka/Vrae';
 import AdminPanel from '@/components/nhka/AdminPanel';
@@ -56,6 +57,8 @@ import Bybelkennis from '@/components/nhka/Bybelkennis';
 import ArtikelPortaal from '@/components/nhka/ArtikelPortaal';
 import RedaksiePortaal from '@/components/nhka/RedaksiePortaal';
 import OmsendbriefKletsbot from '@/components/omsendbrief/OmsendbriefKletsbot';
+import Musiek from '@/components/musiek/Musiek';
+import MusiekAdmin from '@/components/musiek/MusiekAdmin';
 
 
 
@@ -103,7 +106,7 @@ const OfflineIndicator: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
-  const { currentView, isLoggedIn, loading, currentGemeente, currentUser, refreshGemeentes, gemeentes, setCurrentView } = useNHKA();
+  const { currentView, isLoggedIn, loading, currentGemeente, currentUser, refreshGemeentes, gemeentes, setCurrentView, lmsFullScreen } = useNHKA();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Onboarding guide for first-time users
@@ -298,6 +301,12 @@ const AppContent: React.FC = () => {
         return <RedaksiePortaal />;
       case 'omsendbrief-kletsbot':
         return <OmsendbriefKletsbot />;
+      case 'krisis-bestuur':
+        return <KrisisBestuur />;
+      case 'musiek':
+        return <Musiek />;
+      case 'musiek-admin':
+        return <MusiekAdmin />;
       default:
         return <Dashboard />;
     }
@@ -309,17 +318,23 @@ const AppContent: React.FC = () => {
 
 
 
+  const isLmsFullScreen = currentView === 'geloofsgroei' && lmsFullScreen;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <Header onMenuToggle={handleMenuToggle} onNavigate={handleHeaderNavigate} />
+      {/* Header - hidden in LMS full screen */}
+      {!isLmsFullScreen && (
+        <Header onMenuToggle={handleMenuToggle} onNavigate={handleHeaderNavigate} />
+      )}
 
       <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        {/* Sidebar - hidden in LMS full screen */}
+        {!isLmsFullScreen && (
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        )}
 
         {/* Main Content */}
-        <main className={`flex-1 min-h-0 p-4 md:p-6 lg:p-8 w-full overflow-y-auto ${currentView === 'geloofsonderrig' ? 'geloofsonderrig-onderwerpe-scroll' : 'max-w-6xl mx-auto'}`}>
+        <main className={`flex-1 min-h-0 p-4 md:p-6 lg:p-8 w-full overflow-y-auto ${isLmsFullScreen ? 'p-0 max-w-none' : currentView === 'geloofsonderrig' ? 'geloofsonderrig-onderwerpe-scroll' : 'max-w-6xl mx-auto'}`}>
           {renderView()}
         </main>
       </div>
@@ -329,34 +344,36 @@ const AppContent: React.FC = () => {
       <OfflineIndicator />
 
       {/* Onboarding Guide for first-time users */}
-      {showOnboarding && (
+      {showOnboarding && !isLmsFullScreen && (
         <OnboardingGids
           onComplete={completeOnboarding}
           onMenuToggle={handleMenuToggle}
         />
       )}
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-100 py-6 mt-8">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full overflow-hidden">
-              <img
-                src={LOGO_URL}
-                alt="Logo"
-                className="w-full h-full object-contain"
-              />
+      {/* Footer - hidden in LMS full screen */}
+      {!isLmsFullScreen && (
+        <footer className="bg-white border-t border-gray-100 py-6 mt-8">
+          <div className="max-w-6xl mx-auto px-4 text-center">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full overflow-hidden">
+                <img
+                  src={LOGO_URL}
+                  alt="Logo"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <span className="font-semibold text-[#002855]">Dra Mekaar se Laste</span>
             </div>
-            <span className="font-semibold text-[#002855]">Dra Mekaar se Laste</span>
+            <p className="text-sm text-gray-500">
+              © {new Date().getFullYear()} Nederduitsch Hervormde Kerk van Afrika
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              "Dra mekaar se laste en vervul so die wet van Christus" — Galasiërs 6:2
+            </p>
           </div>
-          <p className="text-sm text-gray-500">
-            © {new Date().getFullYear()} Nederduitsch Hervormde Kerk van Afrika
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            "Dra mekaar se laste en vervul so die wet van Christus" — Galasiërs 6:2
-          </p>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 };

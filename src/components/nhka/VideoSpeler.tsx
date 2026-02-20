@@ -146,7 +146,44 @@ const VideoSpeler: React.FC<VideoSpelerProps> = ({
       }
     }
 
-    // 5. Direct video URL
+    // 5. Google Drive
+    if (trimmedUrl.includes('drive.google.com')) {
+      let fileId = '';
+      const matchD = trimmedUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (matchD) fileId = matchD[1];
+      else {
+        const matchOpen = trimmedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (matchOpen) fileId = matchOpen[1];
+      }
+      if (fileId) {
+        return {
+          type: 'iframe',
+          url: `<iframe src="https://drive.google.com/file/d/${fileId}/preview" allow="autoplay; fullscreen" allowfullscreen style="width: 100%; height: 100%; border: none;"></iframe>`
+        };
+      }
+    }
+
+    // 6. OneDrive (gebruik die volle share link: onedrive.live.com/view.aspx?resid=...&authkey=...)
+    if (trimmedUrl.includes('onedrive.live.com')) {
+      const urlObj = (() => {
+        try { return new URL(trimmedUrl); } catch { return null; }
+      })();
+      if (urlObj) {
+        const resid = urlObj.searchParams.get('resid') || urlObj.searchParams.get('cid');
+        const authkey = urlObj.searchParams.get('authkey');
+        if (resid) {
+          const embedUrl = authkey
+            ? `https://onedrive.live.com/embed?resid=${encodeURIComponent(resid)}&authkey=${encodeURIComponent(authkey)}`
+            : `https://onedrive.live.com/embed?resid=${encodeURIComponent(resid)}`;
+          return {
+            type: 'iframe',
+            url: `<iframe src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen style="width: 100%; height: 100%; border: none;"></iframe>`
+          };
+        }
+      }
+    }
+
+    // 7. Direct video URL
     return { type: 'direct', url: trimmedUrl };
   }, [videoUrl]);
 
@@ -167,7 +204,7 @@ const VideoSpeler: React.FC<VideoSpelerProps> = ({
           video_duur: Math.floor(videoDuration),
           laaste_gekyk: new Date().toISOString(),
           status: completed ? 'voltooi' : 'in_vordering',
-          ...(completed && { voltooi_datum: new Date().toISOString() })
+          ...(completed && { completed_at: new Date().toISOString() })
         }, {
           onConflict: 'gebruiker_id,les_id'
         });
@@ -488,38 +525,6 @@ const VideoSpeler: React.FC<VideoSpelerProps> = ({
             )
           )}
         </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {hasPrevious && (
-              <Button variant="outline" size="sm" onClick={onPrevious}>
-                <SkipBack className="w-4 h-4 mr-1" />
-                Vorige
-              </Button>
-            )}
-          </div>
-
-          <Button
-            className="bg-[#D4A84B] hover:bg-[#C49A3B]"
-            onClick={onComplete}
-          >
-            <CheckCircle className="w-4 h-4 mr-2" />
-            Merk as Voltooi
-          </Button>
-
-          <div className="flex items-center gap-2">
-            {hasNext && (
-              <Button variant="outline" size="sm" onClick={onNext}>
-                Volgende
-                <SkipForward className="w-4 h-4 ml-1" />
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <p className="text-sm text-gray-500 text-center">
-          Nota: Vir YouTube, Vimeo of embedded video's, merk asseblief self die les as voltooi wanneer jy klaar gekyk het.
-        </p>
       </div>
     );
   }

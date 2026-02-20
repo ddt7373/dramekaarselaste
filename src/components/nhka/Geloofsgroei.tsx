@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -188,6 +189,8 @@ const GeloofsgroeiContent: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [redeemingVoucher, setRedeemingVoucher] = useState(false);
 
   // New states for course player
   const [isPlaying, setIsPlaying] = useState(false);
@@ -374,6 +377,11 @@ const GeloofsgroeiContent: React.FC = () => {
       fetchKursusVordering(selectedKursus.id);
     }
     fetchMyVordering();
+    // Scroll to top when going back
+    requestAnimationFrame(() => {
+      const main = document.querySelector('main');
+      if (main) main.scrollTo({ top: 0, behavior: 'auto' });
+    });
   };
 
   const handleStartKursus = () => {
@@ -504,6 +512,60 @@ const GeloofsgroeiContent: React.FC = () => {
       toast({ title: 'Registrasie misluk', description: e.message, variant: 'destructive' });
     } finally {
       setRegistering(false);
+    }
+  };
+
+  const handleRedeemVoucher = async () => {
+    if (!currentUser || !selectedKursus) return;
+    const code = voucherCode.trim().toUpperCase();
+    if (!code) {
+      toast({ title: 'Voer voucher kode in', description: 'Tik die kode wat jy ontvang het.', variant: 'destructive' });
+      return;
+    }
+    setRedeemingVoucher(true);
+    try {
+      const { data: voucher, error: fetchErr } = await supabase
+        .from('lms_kursus_vouchers')
+        .select('id')
+        .eq('voucher_kode', code)
+        .eq('kursus_id', selectedKursus.id)
+        .is('used_by', null)
+        .maybeSingle();
+
+      if (fetchErr) throw new Error(fetchErr.message);
+      if (!voucher) {
+        toast({ title: 'Ongeldige voucher', description: 'Hierdie kode bestaan nie, is reeds gebruik, of is nie vir hierdie kursus nie.', variant: 'destructive' });
+        return;
+      }
+
+      const { error: updateErr } = await supabase
+        .from('lms_kursus_vouchers')
+        .update({ used_by: currentUser.id, used_at: new Date().toISOString() })
+        .eq('id', voucher.id);
+
+      if (updateErr) throw new Error(updateErr.message);
+
+      const { error: regErr } = await supabase
+        .from('lms_registrasies')
+        .upsert([{
+          gebruiker_id: currentUser.id,
+          kursus_id: selectedKursus.id,
+          status: 'geregistreer',
+          betaling_status: 'voucher',
+          betaling_bedrag: 0,
+          begin_datum: new Date().toISOString()
+        }], { onConflict: 'kursus_id,gebruiker_id' });
+
+      if (regErr) throw new Error(regErr.message);
+
+      toast({ title: 'Voucher ingewissel!', description: 'Jy is nou geregistreer vir hierdie kursus.' });
+      setVoucherCode('');
+      setIsRegistered(true);
+      fetchMyRegistrasies();
+    } catch (e: any) {
+      toast({ title: 'Kon nie voucher inwissel nie', description: e.message, variant: 'destructive' });
+    } finally {
+      setRedeemingVoucher(false);
     }
   };
 
@@ -786,6 +848,37 @@ const GeloofsgroeiContent: React.FC = () => {
                         <>Koop Nou</>
                       )}
                     </Button>
+
+                    {!selectedKursus.is_gratis && (
+                      <>
+                        <div className="relative my-3">
+                          <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-200" /></div>
+                          <div className="relative flex justify-center text-xs uppercase text-gray-500"><span className="bg-white px-2">of</span></div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="voucher-code" className="text-sm text-gray-600">Ek het &#39;n voucher</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="voucher-code"
+                              placeholder="Voer voucher kode in"
+                              value={voucherCode}
+                              onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                              className="font-mono uppercase"
+                              maxLength={12}
+                            />
+                            <Button
+                              variant="outline"
+                              onClick={handleRedeemVoucher}
+                              disabled={redeemingVoucher || !voucherCode.trim()}
+                              className="shrink-0"
+                            >
+                              {redeemingVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Registreer met voucher'}
+                            </Button>
+                          </div>
+                          <p className="text-xs text-gray-500">As iemand namens jou betaal het (bv. gemeente), voer die kode wat jy ontvang het hier in.</p>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 

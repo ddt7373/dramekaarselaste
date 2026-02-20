@@ -320,7 +320,7 @@ const VerhoudingsBestuur: React.FC = () => {
                                     </option>
                                     {(userSearchQuery.length > 0 ? userSearchResults : person2List).map(u => (
                                         <option key={u.id} value={u.id}>
-                                            {u.naam} {u.van} ({(u as any).gemeente_data?.naam || u.gemeente || 'Onbekend'})
+                                            {u.naam} {u.van} ({typeof (u as any).gemeente_data?.naam === 'string' ? (u as any).gemeente_data.naam : (typeof u.gemeente === 'string' ? u.gemeente : 'Onbekend')})
                                         </option>
                                     ))}
                                 </select>
@@ -386,7 +386,7 @@ const VerhoudingsBestuur: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <p className="font-medium text-gray-900">{v.lidmaat?.naam} {v.lidmaat?.van}</p>
-                                                    <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{(v.lidmaat as any).gemeente_data?.naam || v.lidmaat?.gemeente || 'Onbekend'}</p>
+                                                    <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{typeof (v.lidmaat as any)?.gemeente_data?.naam === 'string' ? (v.lidmaat as any).gemeente_data.naam : 'Onbekend'}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -403,7 +403,7 @@ const VerhoudingsBestuur: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <p className="font-medium text-gray-900">{v.verwante?.naam} {v.verwante?.van}</p>
-                                                    <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{(v.verwante as any).gemeente_data?.naam || v.verwante?.gemeente || 'Onbekend'}</p>
+                                                    <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{typeof (v.verwante as any)?.gemeente_data?.naam === 'string' ? (v.verwante as any).gemeente_data.naam : 'Onbekend'}</p>
                                                 </div>
                                             </div>
                                         </td>

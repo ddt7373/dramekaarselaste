@@ -126,6 +126,32 @@ const RedaksiePortaal: React.FC = () => {
         }
     };
 
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+
+    const handleDeleteIndiening = async (e: React.MouseEvent, item: ArtikelIndiening) => {
+        e.stopPropagation();
+        if (!currentUser?.id) {
+            toast({ title: 'Fout', description: 'Jy moet aangemeld wees om te verwyder.', variant: 'destructive' });
+            return;
+        }
+        if (!window.confirm(`Is jy seker jy wil hierdie artikel verwyder?\n\n"${item.titel}"\n\nDit kan nie ongedaan gemaak word nie.`)) return;
+        setDeletingId(item.id);
+        try {
+            const { error } = await supabase.rpc('delete_artikel_indiening', {
+                p_indiening_id: item.id,
+                p_gebruiker_id: currentUser.id
+            });
+            if (error) throw error;
+            toast({ title: 'Verwyder', description: 'Artikel is verwyder.' });
+            setIndienings(prev => prev.filter(i => i.id !== item.id));
+            if (selectedIndiening?.id === item.id) setSelectedIndiening(null);
+        } catch (error: any) {
+            toast({ title: 'Fout', description: error.message || 'Kon nie artikel verwyder nie.', variant: 'destructive' });
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     const handleDownload = (indiening: ArtikelIndiening) => {
         const content = `
 TITEL: ${indiening.titel}
@@ -231,7 +257,7 @@ ${indiening.inhoud}
                                 >
                                     <CardContent className="p-4">
                                         <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
                                                 <h3 className="font-bold text-[#002855] truncate">{item.titel}</h3>
                                                 <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                                                     <User className="w-3 h-3" />
@@ -239,6 +265,21 @@ ${indiening.inhoud}
                                                 </p>
                                             </div>
                                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-full"
+                                                    onClick={(e) => handleDeleteIndiening(e, item)}
+                                                    disabled={deletingId === item.id}
+                                                    title="Verwyder artikel"
+                                                >
+                                                    {deletingId === item.id ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="w-4 h-4" />
+                                                    )}
+                                                </Button>
                                                 <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
                                                     {item.artikel_tipe?.naam}
                                                 </span>
@@ -279,6 +320,19 @@ ${indiening.inhoud}
                                                 <Button onClick={() => handleDownload(selectedIndiening)} className="bg-green-600 hover:bg-green-700">
                                                     <Download className="w-4 h-4 mr-2" />
                                                     Laai Af
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={(e) => handleDeleteIndiening(e, selectedIndiening)}
+                                                    disabled={deletingId === selectedIndiening.id}
+                                                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                                >
+                                                    {deletingId === selectedIndiening.id ? (
+                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="w-4 h-4 mr-2" />
+                                                    )}
+                                                    Verwyder
                                                 </Button>
                                             </div>
                                         </div>

@@ -32,6 +32,10 @@ interface NHKAContextType {
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
 
+  // LMS full screen (Geloofsgroei kursus speler)
+  lmsFullScreen: boolean;
+  setLmsFullScreen: (v: boolean) => void;
+
   // Language
   language: 'af' | 'en';
   setLanguage: (lang: 'af' | 'en') => void;
@@ -130,6 +134,7 @@ export const NHKAProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [currentUser, setCurrentUserState] = useState<Gebruiker | null>(null);
   const [currentGemeente, setCurrentGemeenteState] = useState<Gemeente | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('gemeente-select');
+  const [lmsFullScreen, setLmsFullScreen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sessionRestored, setSessionRestored] = useState(false);
 
@@ -1355,6 +1360,8 @@ export const NHKAProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isLoggedIn,
         currentView,
         setCurrentView,
+        lmsFullScreen,
+        setLmsFullScreen,
 
         // Language
         language,

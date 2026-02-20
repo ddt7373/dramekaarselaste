@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LMSLes, LMSBylae } from '@/types/nhka';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,12 +14,29 @@ interface OpdragSkepperProps {
     onUpdate: () => void;
 }
 
+const normalizeBylaes = (val: unknown): LMSBylae[] => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+        try {
+            const p = JSON.parse(val);
+            return Array.isArray(p) ? p : [];
+        } catch { return []; }
+    }
+    return [];
+};
+
 const OpdragSkepper: React.FC<OpdragSkepperProps> = ({ les, onUpdate }) => {
     const [loading, setLoading] = useState(false);
     const [punte, setPunte] = useState(les.maksimum_punte || 100);
     const [instructions, setInstructions] = useState(les.inhoud || '');
-    const [bylaes, setBylaes] = useState<LMSBylae[]>(les.bylaes || []);
+    const [bylaes, setBylaes] = useState<LMSBylae[]>(() => normalizeBylaes(les.bylaes));
     const [uploading, setUploading] = useState(false);
+
+    useEffect(() => {
+        setBylaes(normalizeBylaes(les.bylaes));
+        setInstructions(les.inhoud || '');
+        setPunte(les.maksimum_punte || 100);
+    }, [les.id]);
 
     const handleSave = async () => {
         setLoading(true);

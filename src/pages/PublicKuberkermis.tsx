@@ -65,6 +65,7 @@ const PublicKuberkermis: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [allocatedTickets, setAllocatedTickets] = useState<{ produk: string, nommers: string[] }[]>([]);
+  const [allocatedVouchers, setAllocatedVouchers] = useState<{ produk: string, kodes: string[] }[]>([]);
   const [allocating, setAllocating] = useState(false);
 
   // Checkout form
@@ -118,6 +119,16 @@ const PublicKuberkermis: React.FC = () => {
         if (orders) {
           console.log(`Processing ${orders.length} orders for tickets/stock`);
           const ticketsFound: { produk: string, nommers: string[] }[] = [];
+          const vouchersFound: { produk: string, kodes: string[] }[] = [];
+
+          const generateVoucherCode = (): string => {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            const arr = new Uint8Array(8);
+            crypto.getRandomValues(arr);
+            for (let i = 0; i < 8; i++) code += chars[arr[i]! % chars.length];
+            return code;
+          };
 
           for (const order of orders) {
             // Ensure we have the product data (join might fail if RLS or relations are weird)
@@ -201,9 +212,33 @@ const PublicKuberkermis: React.FC = () => {
                 console.warn(`Kuberkermis: No available tickets found for product ${produk.id}`);
               }
             }
+
+            // LMS course vouchers: generate one code per quantity
+            const lmsKursusId = (produk as { lms_kursus_id?: string | null }).lms_kursus_id;
+            if (lmsKursusId && order.hoeveelheid > 0) {
+              const kodes: string[] = [];
+              for (let i = 0; i < order.hoeveelheid; i++) {
+                let code = generateVoucherCode();
+                while (kodes.includes(code)) code = generateVoucherCode();
+                kodes.push(code);
+              }
+              const { error: vErr } = await supabase
+                .from('lms_kursus_vouchers')
+                .insert(kodes.map(voucher_kode => ({
+                  voucher_kode,
+                  kursus_id: lmsKursusId,
+                  bestelling_id: order.id
+                })));
+              if (vErr) {
+                console.error('Kuberkermis: Error creating vouchers:', vErr);
+              } else {
+                vouchersFound.push({ produk: produk.titel || 'Kursus voucher', kodes });
+              }
+            }
           }
           console.log('Kuberkermis: Final tickets found for UI:', ticketsFound);
           setAllocatedTickets(ticketsFound);
+          setAllocatedVouchers(vouchersFound);
         }
         localStorage.removeItem(`kuberkermis_pending_orders_${gemeenteId}`);
       } catch (err) {
@@ -494,6 +529,33 @@ const PublicKuberkermis: React.FC = () => {
                 <div className="mt-4 pt-3 border-t border-blue-100">
                   <p className="text-xs text-blue-600 italic">
                     * Neem asseblief 'n skermskoot van hierdie nommers vir jou rekords of wys dit by die kermis.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {!allocating && allocatedVouchers.length > 0 && (
+              <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 mb-6 text-left">
+                <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-[#D4A84B]" /> Kursus Voucher Kodes:
+                </h3>
+                <div className="space-y-3">
+                  {allocatedVouchers.map((v, idx) => (
+                    <div key={idx}>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-1">{v.produk}:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {v.kodes.map(k => (
+                          <Badge key={k} variant="secondary" className="bg-white border-amber-200 text-[#002855] font-mono text-sm px-3 py-1">
+                            {k}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-3 border-t border-amber-100">
+                  <p className="text-xs text-amber-700 italic">
+                    * Gee hierdie kode aan die persoon wat vir die kursus wil registreer. Hulle voer dit in by Geloofsgroei Akademie → Registreer → Betaal met voucher.
                   </p>
                 </div>
               </div>

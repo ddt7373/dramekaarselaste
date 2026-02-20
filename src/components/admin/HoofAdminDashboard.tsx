@@ -10,8 +10,10 @@ import {
     Phone,
     Mail,
     AlertTriangle,
-    TrendingUp
+    TrendingUp,
+    EyeOff
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -36,9 +38,11 @@ interface GemeenteSummary {
     total_inventory_items?: number;
     compliant_items?: number;
     is_fully_compliant?: boolean;
+    sluit_uit_van_statistiek?: boolean;
 }
 
 const HoofAdminDashboard: React.FC = () => {
+    const { toast } = useToast();
     const [gemeentes, setGemeentes] = useState<GemeenteSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
@@ -64,12 +68,26 @@ const HoofAdminDashboard: React.FC = () => {
 
             if (gemeenteError) throw gemeenteError;
 
-            setGemeentes(gemeenteData || []);
+            // Fetch extra fields from gemeentes table for exclusion flag
+            const { data: gemeentesExtra, error: extraError } = await supabase
+                .from('gemeentes')
+                .select('id, sluit_uit_van_statistiek');
+
+            if (extraError) console.error("Error fetching extra fields", extraError);
+
+            const mergedData = (gemeenteData || []).map(g => {
+                const extra = gemeentesExtra?.find(e => e.id === g.id);
+                return { ...g, sluit_uit_van_statistiek: extra?.sluit_uit_van_statistiek };
+            });
+
+            setGemeentes(mergedData);
 
             // Calculate stats
-            const totalGemeentes = gemeenteData?.length || 0;
-            const totalSouls = gemeenteData?.reduce((sum, g) => sum + (g.latest_total_souls || 0), 0) || 0;
-            const compliantGemeentes = gemeenteData?.filter(g => g.is_fully_compliant).length || 0;
+            const totalGemeentes = mergedData.length;
+            const totalSouls = mergedData
+                .filter(g => !g.sluit_uit_van_statistiek)
+                .reduce((sum, g) => sum + (g.latest_total_souls || 0), 0) || 0;
+            const compliantGemeentes = mergedData.filter(g => g.is_fully_compliant).length;
 
             setStats({
                 totalGemeentes,
@@ -80,6 +98,40 @@ const HoofAdminDashboard: React.FC = () => {
             console.error('Error fetching dashboard data:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleToggleExclusion = async (gemeente: GemeenteSummary) => {
+        try {
+            const newValue = !gemeente.sluit_uit_van_statistiek;
+
+            // Optimistic update
+            const updatedGemeentes = gemeentes.map(g =>
+                g.id === gemeente.id ? { ...g, sluit_uit_van_statistiek: newValue } : g
+            );
+            setGemeentes(updatedGemeentes);
+
+            // Recalculate stats
+            const totalGemeentes = updatedGemeentes.length;
+            const totalSouls = updatedGemeentes
+                .filter(g => !g.sluit_uit_van_statistiek)
+                .reduce((sum, g) => sum + (g.latest_total_souls || 0), 0) || 0;
+            const compliantGemeentes = updatedGemeentes.filter(g => g.is_fully_compliant).length;
+
+            setStats({ totalGemeentes, totalSouls, compliantGemeentes });
+
+            const { error } = await supabase
+                .from('gemeentes')
+                .update({ sluit_uit_van_statistiek: newValue })
+                .eq('id', gemeente.id);
+
+            if (error) throw error;
+
+            toast({ title: "Sukses", description: "Instelling opgedateer" });
+        } catch (err) {
+            console.error(err);
+            toast({ title: "Fout", description: "Kon nie opdateer nie", variant: "destructive" });
+            fetchDashboardData(); // Revert
         }
     };
 
@@ -320,6 +372,9 @@ const HoofAdminDashboard: React.FC = () => {
                                             <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                                                 Nakoming
                                             </th>
+                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                                Sluit Uit
+                                            </th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                                 Laaste Opdatering
                                             </th>
@@ -385,6 +440,16 @@ const HoofAdminDashboard: React.FC = () => {
                                                             {gemeente.compliant_items}/{gemeente.total_inventory_items}
                                                         </p>
                                                     )}
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <div className="flex justify-center" title="Sluit uit van statistiek">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={gemeente.sluit_uit_van_statistiek || false}
+                                                            onChange={() => handleToggleExclusion(gemeente)}
+                                                            className="w-4 h-4 rounded border-gray-300 text-[#002855] focus:ring-[#002855]"
+                                                        />
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-1 text-sm text-gray-600">

@@ -76,7 +76,9 @@ export const lmsTranslations = {
         lessonCompleteDesc: 'Gaan voort na die volgende les.',
         nextLesson: 'Volgende Les',
         prevLesson: 'Vorige Les',
-        completeCourse: 'Voltooi Kursus'
+        completeCourse: 'Voltooi Kursus',
+        fullScreen: 'Volskerm',
+        exitFullScreen: 'Verlaat Volskerm'
     },
     en: {
         title: 'Faith Growth',
@@ -155,6 +157,8 @@ export const lmsTranslations = {
         lessonCompleteDesc: 'Continue to the next lesson.',
         nextLesson: 'Next Lesson',
         prevLesson: 'Previous Lesson',
-        completeCourse: 'Complete Course'
+        completeCourse: 'Complete Course',
+        fullScreen: 'Full Screen',
+        exitFullScreen: 'Exit Full Screen'
     }
 };

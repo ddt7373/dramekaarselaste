@@ -173,6 +173,7 @@ const AdminPanel: React.FC = () => {
     wyk_id: '',
     besoekpunt_id: '',
     aktief: true,
+    is_oorlede: false,
     notas: '',
     geslag: '' as '' | 'man' | 'vrou' | 'ander',
     titel: '',
@@ -722,6 +723,7 @@ const AdminPanel: React.FC = () => {
       wyk_id: user.wyk_id || '',
       besoekpunt_id: user.besoekpunt_id || '',
       aktief: user.aktief,
+      is_oorlede: user.is_oorlede || false,
       notas: user.notas || '',
       geslag: (user.geslag as '' | 'man' | 'vrou' | 'ander') || '',
       titel: user.titel || '',
@@ -808,6 +810,35 @@ const AdminPanel: React.FC = () => {
         );
       }
 
+      // Check for deceased status change
+      if (editUser.is_oorlede && !selectedUser.is_oorlede) {
+        await createOuditLog(
+          selectedUser.id,
+          'status_wysig',
+          `Lidmaat gemerk as Oorlede`,
+          'Lewend',
+          'Oorlede'
+        );
+
+        // Add to stats log
+        if (currentGemeente) {
+          try {
+            await supabase
+              .from('gemeente_statistiek_logs')
+              .insert({
+                gemeente_id: currentGemeente.id,
+                datum: new Date().toISOString(),
+                tipe: 'vermindering',
+                rede: 'oorlede',
+                lidmaat_id: selectedUser.id,
+                beskrywing: `Lidmaat ${selectedUser.naam} ${selectedUser.van} is oorlede.`
+              });
+          } catch (e) {
+            console.error("Error logging death stat:", e);
+          }
+        }
+      }
+
       // If wyk changed, update wyk_id
       let wykId = editUser.wyk_id || null;
       let besoekpuntId = editUser.besoekpunt_id || null;
@@ -873,6 +904,7 @@ const AdminPanel: React.FC = () => {
           wyk_id: wykId,
           besoekpunt_id: besoekpuntId,
           aktief: editUser.aktief,
+          is_oorlede: editUser.is_oorlede,
           notas: editUser.notas || null,
           geslag: editUser.geslag || null,
           titel: editUser.titel || null,
@@ -2466,6 +2498,24 @@ const AdminPanel: React.FC = () => {
                             <span className="text-sm font-medium text-gray-700">Aktiewe lidmaat</span>
                           </label>
                         </div>
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editUser.is_oorlede || false}
+                              onChange={(e) => {
+                                const isOorlede = e.target.checked;
+                                setEditUser({
+                                  ...editUser,
+                                  is_oorlede: isOorlede,
+                                  aktief: isOorlede ? false : editUser.aktief // Auto deactivate if deceased
+                                });
+                              }}
+                              className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Oorlede</span>
+                          </label>
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
                           <textarea
@@ -2732,7 +2782,7 @@ const AdminPanel: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-medium text-[#002855]">{selectedVerwanteUser.naam} {selectedVerwanteUser.van}</p>
-                          <p className="text-xs text-gray-500">{((selectedVerwanteUser as any).gemeente_data?.naam || selectedVerwanteUser.gemeente) || 'Onbekende Gemeente'}</p>
+                          <p className="text-xs text-gray-500">{typeof (selectedVerwanteUser as any).gemeente_data?.naam === 'string' ? (selectedVerwanteUser as any).gemeente_data.naam : (typeof selectedVerwanteUser.gemeente === 'string' ? selectedVerwanteUser.gemeente : 'Onbekende Gemeente')}</p>
                         </div>
                       </div>
                       <button
@@ -2825,7 +2875,7 @@ const AdminPanel: React.FC = () => {
                                 className="w-full text-left px-4 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0"
                               >
                                 <p className="font-medium text-[#002855]">{user.naam} {user.van}</p>
-                                <p className="text-xs text-gray-500">{((user as any).gemeente_data?.naam || user.gemeente) || 'Onbekend'}</p>
+                                <p className="text-xs text-gray-500">{typeof (user as any).gemeente_data?.naam === 'string' ? (user as any).gemeente_data.naam : (typeof user.gemeente === 'string' ? user.gemeente : 'Onbekend')}</p>
                               </button>
                             ))}
                           </div>
@@ -2940,130 +2990,130 @@ const AdminPanel: React.FC = () => {
 
       {/* DUMMY block removed - Lidmate content is above */}
       {false && (
-                <>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#002855] flex items-center justify-center">
-                    <Upload className="w-5 h-5 text-[#D4A84B]" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-[#002855]">Laai Gebruikers Op</h2>
-                    <p className="text-sm text-gray-500">Laai lidmate via CSV lêer op</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowCSVModal(false);
-                      setCsvFile(null);
-                      setCsvPreview([]);
-                    }}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors ml-auto"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
+        <>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#002855] flex items-center justify-center">
+              <Upload className="w-5 h-5 text-[#D4A84B]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#002855]">Laai Gebruikers Op</h2>
+              <p className="text-sm text-gray-500">Laai lidmate via CSV lêer op</p>
+            </div>
+            <button
+              onClick={() => {
+                setShowCSVModal(false);
+                setCsvFile(null);
+                setCsvPreview([]);
+              }}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors ml-auto"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
 
-              <div className="p-4 space-y-4">
-                {/* CSV Format Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800 font-medium mb-2">CSV Formaat Vereistes:</p>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Eerste ry moet kolomhoofde bevat</li>
-                    <li>• Verpligte kolomme: <span className="font-mono bg-blue-100 px-1 rounded">naam</span>, <span className="font-mono bg-blue-100 px-1 rounded">van</span></li>
-                    <li>• Opsionele kolomme: <span className="font-mono bg-blue-100 px-1 rounded">selfoon</span>, <span className="font-mono bg-blue-100 px-1 rounded">epos</span>, <span className="font-mono bg-blue-100 px-1 rounded">adres</span>, <span className="font-mono bg-blue-100 px-1 rounded">geboortedatum</span>, <span className="font-mono bg-blue-100 px-1 rounded">rol</span></li>
-                  </ul>
-                </div>
+          <div className="p-4 space-y-4">
+            {/* CSV Format Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800 font-medium mb-2">CSV Formaat Vereistes:</p>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• Eerste ry moet kolomhoofde bevat</li>
+                <li>• Verpligte kolomme: <span className="font-mono bg-blue-100 px-1 rounded">naam</span>, <span className="font-mono bg-blue-100 px-1 rounded">van</span></li>
+                <li>• Opsionele kolomme: <span className="font-mono bg-blue-100 px-1 rounded">selfoon</span>, <span className="font-mono bg-blue-100 px-1 rounded">epos</span>, <span className="font-mono bg-blue-100 px-1 rounded">adres</span>, <span className="font-mono bg-blue-100 px-1 rounded">geboortedatum</span>, <span className="font-mono bg-blue-100 px-1 rounded">rol</span></li>
+              </ul>
+            </div>
 
-                {/* File Upload */}
-                <div>
-                  <input
-                    ref={csvInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleCSVFileChange}
-                    className="hidden"
-                  />
-                  <div
-                    onClick={() => csvInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-[#D4A84B] transition-colors"
-                  >
-                    {csvFile ? (
-                      <div className="flex items-center justify-center gap-3">
-                        <FileText className="w-8 h-8 text-[#D4A84B]" />
-                        <div className="text-left">
-                          <p className="font-medium text-gray-900">{csvFile.name}</p>
-                          <p className="text-sm text-gray-500">{(csvFile.size / 1024).toFixed(1)} KB</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center">
-                        <Upload className="w-10 h-10 text-gray-400 mb-3" />
-                        <p className="text-gray-600 font-medium">Klik om CSV lêer te kies</p>
-                        <p className="text-sm text-gray-400 mt-1">of sleep en los hier</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Preview */}
-                {csvPreview.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Voorskou (eerste 5 rye):</p>
-                    <div className="bg-gray-50 rounded-lg p-3 overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-1 px-2 font-medium text-gray-600">Naam</th>
-                            <th className="text-left py-1 px-2 font-medium text-gray-600">Van</th>
-                            <th className="text-left py-1 px-2 font-medium text-gray-600">Selfoon</th>
-                            <th className="text-left py-1 px-2 font-medium text-gray-600">Rol</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {csvPreview.map((row, idx) => (
-                            <tr key={idx} className="border-b border-gray-100 last:border-0">
-                              <td className="py-1 px-2 text-gray-900">{row.naam}</td>
-                              <td className="py-1 px-2 text-gray-900">{row.van}</td>
-                              <td className="py-1 px-2 text-gray-600">{row.selfoon || '-'}</td>
-                              <td className="py-1 px-2 text-gray-600">{row.rol || 'lidmaat'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+            {/* File Upload */}
+            <div>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleCSVFileChange}
+                className="hidden"
+              />
+              <div
+                onClick={() => csvInputRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-[#D4A84B] transition-colors"
+              >
+                {csvFile ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <FileText className="w-8 h-8 text-[#D4A84B]" />
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900">{csvFile.name}</p>
+                      <p className="text-sm text-gray-500">{(csvFile.size / 1024).toFixed(1)} KB</p>
                     </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <Upload className="w-10 h-10 text-gray-400 mb-3" />
+                    <p className="text-gray-600 font-medium">Klik om CSV lêer te kies</p>
+                    <p className="text-sm text-gray-400 mt-1">of sleep en los hier</p>
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="flex gap-3 p-4 border-t border-gray-100">
-                <button
-                  onClick={() => {
-                    setShowCSVModal(false);
-                    setCsvFile(null);
-                    setCsvPreview([]);
-                  }}
-                  className="flex-1 py-2 px-4 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Kanselleer
-                </button>
-                <button
-                  onClick={handleCSVUpload}
-                  disabled={!csvFile || uploadingCSV}
-                  className="flex-1 py-2 px-4 rounded-xl bg-[#D4A84B] text-[#002855] font-semibold hover:bg-[#c49a3d] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {uploadingCSV ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Laai op...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      Laai Op
-                    </>
-                  )}
-                </button>
+            {/* Preview */}
+            {csvPreview.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Voorskou (eerste 5 rye):</p>
+                <div className="bg-gray-50 rounded-lg p-3 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-1 px-2 font-medium text-gray-600">Naam</th>
+                        <th className="text-left py-1 px-2 font-medium text-gray-600">Van</th>
+                        <th className="text-left py-1 px-2 font-medium text-gray-600">Selfoon</th>
+                        <th className="text-left py-1 px-2 font-medium text-gray-600">Rol</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvPreview.map((row, idx) => (
+                        <tr key={idx} className="border-b border-gray-100 last:border-0">
+                          <td className="py-1 px-2 text-gray-900">{row.naam}</td>
+                          <td className="py-1 px-2 text-gray-900">{row.van}</td>
+                          <td className="py-1 px-2 text-gray-600">{row.selfoon || '-'}</td>
+                          <td className="py-1 px-2 text-gray-600">{row.rol || 'lidmaat'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </>
-        )
+            )}
+          </div>
+
+          <div className="flex gap-3 p-4 border-t border-gray-100">
+            <button
+              onClick={() => {
+                setShowCSVModal(false);
+                setCsvFile(null);
+                setCsvPreview([]);
+              }}
+              className="flex-1 py-2 px-4 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+            >
+              Kanselleer
+            </button>
+            <button
+              onClick={handleCSVUpload}
+              disabled={!csvFile || uploadingCSV}
+              className="flex-1 py-2 px-4 rounded-xl bg-[#D4A84B] text-[#002855] font-semibold hover:bg-[#c49a3d] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {uploadingCSV ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Laai op...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Laai Op
+                </>
+              )}
+            </button>
+          </div>
+        </>
+      )
       }
 
       {/* Members Tab */}

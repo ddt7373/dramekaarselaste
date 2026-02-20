@@ -11,7 +11,10 @@
     "preview": "vite preview",
     "supabase:deploy-dagstukkies": "supabase functions deploy generate-dagstukkies",
     "supabase:deploy-geloofsonderrig": "supabase functions deploy geloofsonderrig-ai",
-    "supabase:deploy-functions": "supabase functions deploy generate-dagstukkies && supabase functions deploy geloofsonderrig-ai"
+    "supabase:deploy-functions": "supabase functions deploy generate-dagstukkies && supabase functions deploy geloofsonderrig-ai",
+    "supabase:deploy-notifications": "supabase functions deploy send-email && supabase functions deploy send-push-notification",
+    "supabase:deploy-certificate": "supabase functions deploy generate-certificate",
+    "supabase:deploy-musiek": "supabase functions deploy musiek-ai"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

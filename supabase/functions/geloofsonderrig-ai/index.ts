@@ -45,7 +45,7 @@ serve(async (req) => {
             const htmlBody = data.htmlBody || '';
             const imageBase64 = data.imageBase64 || '';
             const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-            const FROM_EMAIL = Deno.env.get('GELOOFSONDERRIG_FROM_EMAIL') || 'Geloofsonderrig <onboarding@resend.dev>';
+            const FROM_EMAIL = Deno.env.get('GELOOFSONDERRIG_FROM_EMAIL') || 'Geloofsonderrig <gereedskap@dramekaarselaste.co.za>';
 
             if (RESEND_API_KEY) {
                 try {
@@ -68,6 +68,7 @@ serve(async (req) => {
                     });
                     const resData = await res.json();
                     if (!res.ok) throw new Error(resData?.message || 'Resend fout');
+                    console.log('Email share sent to', recipientEmail);
                 } catch (e: any) {
                     console.error('Email share failed:', e?.message || e);
                 }

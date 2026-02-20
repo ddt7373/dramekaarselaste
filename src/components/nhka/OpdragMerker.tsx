@@ -117,7 +117,7 @@ const OpdragMerker: React.FC<OpdragMerkerProps> = ({ les }) => {
                         kursus_id: les.kursus_id,
                         les_id: les.id,
                         status: 'voltooi',
-                        voltooi_datum: new Date().toISOString()
+                        completed_at: new Date().toISOString()
                         // Maybe add score here too if needed
                     }, { onConflict: 'gebruiker_id,les_id' });
             }

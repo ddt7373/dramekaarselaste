@@ -208,7 +208,7 @@ const DenominasieKaart: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-[#002855] flex items-center gap-2">
             <MapPin className="w-7 h-7 text-[#D4A84B]" />
-            NHKA Gemeente Kaart
+            Alle gemeentes
           </h1>
           <p className="text-gray-600 mt-1">
             Alle {NHKA_GEMEENTES.length} NHKA gemeentes in Suider-Afrika

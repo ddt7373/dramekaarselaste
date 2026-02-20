@@ -104,9 +104,16 @@ interface KuberkermisProdukt {
   voorraad: number;
   aktief: boolean;
   is_kaartjie: boolean;
+  lms_kursus_id?: string | null;
   geskep_deur?: string;
   created_at: string;
   updated_at: string;
+}
+
+interface LMSKursusOption {
+  id: string;
+  titel: string;
+  is_gratis: boolean;
 }
 
 interface KuberkermisKaartjieNommer {
@@ -194,6 +201,7 @@ const KuberkermisContent: React.FC = () => {
 
   // Core state
   const [produkte, setProdukte] = useState<KuberkermisProdukt[]>([]);
+  const [lmsKursusse, setLmsKursusse] = useState<LMSKursusOption[]>([]);
   const [bestellings, setBestellings] = useState<KuberkermisBestelling[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -217,14 +225,24 @@ const KuberkermisContent: React.FC = () => {
   const [savingTickets, setSavingTickets] = useState(false);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    titel: string;
+    beskrywing: string;
+    prys: string;
+    kategorie: KuberkermisKategorie;
+    foto_url: string;
+    voorraad: string;
+    is_kaartjie: boolean;
+    lms_kursus_id: string;
+  }>({
     titel: '',
     beskrywing: '',
     prys: '',
     kategorie: 'algemeen' as KuberkermisKategorie,
     foto_url: '',
     voorraad: '-1',
-    is_kaartjie: false
+    is_kaartjie: false,
+    lms_kursus_id: ''
   });
 
   // Check if user can manage products
@@ -350,6 +368,18 @@ const KuberkermisContent: React.FC = () => {
         setProdukte(produkteData || []);
       }
 
+      // Load LMS courses for voucher product option (paid courses only)
+      try {
+        const { data: kursusseData } = await supabase
+          .from('lms_kursusse')
+          .select('id, titel, is_gratis')
+          .eq('is_gratis', false)
+          .order('titel');
+        setLmsKursusse((kursusseData as LMSKursusOption[]) || []);
+      } catch {
+        setLmsKursusse([]);
+      }
+
       // Load bestellings if user can manage
       if (canManage) {
         try {
@@ -464,6 +494,7 @@ const KuberkermisContent: React.FC = () => {
         voorraad: parseInt(formData.voorraad) || -1,
         aktief: true,
         is_kaartjie: formData.is_kaartjie,
+        lms_kursus_id: formData.lms_kursus_id?.trim() || null,
         geskep_deur: currentUser.id
       };
 
@@ -525,7 +556,7 @@ const KuberkermisContent: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFormData({ titel: '', beskrywing: '', prys: '', kategorie: 'algemeen', foto_url: '', voorraad: '-1', is_kaartjie: false });
+    setFormData({ titel: '', beskrywing: '', prys: '', kategorie: 'algemeen', foto_url: '', voorraad: '-1', is_kaartjie: false, lms_kursus_id: '' });
     setEditingProdukt(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -539,7 +570,8 @@ const KuberkermisContent: React.FC = () => {
       kategorie: produk.kategorie || 'algemeen',
       foto_url: produk.foto_url || '',
       voorraad: String(produk.voorraad ?? -1),
-      is_kaartjie: produk.is_kaartjie || false
+      is_kaartjie: produk.is_kaartjie || false,
+      lms_kursus_id: produk.lms_kursus_id || ''
     });
     setShowAddDialog(true);
   };
@@ -898,6 +930,22 @@ const KuberkermisContent: React.FC = () => {
                   </Label>
                 </div>
               </div>
+            </div>
+            <div>
+              <Label>LMS Kursus (voucher)</Label>
+              <p className="text-xs text-gray-500 mb-1">Koppel hierdie produk aan &#39;n betaalde kursus. Na betaling word voucher kodes gegenereer wat by Geloofsgroei ingevoer kan word.</p>
+              <Select
+                value={formData.lms_kursus_id || 'geen'}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, lms_kursus_id: v === 'geen' ? '' : v }))}
+              >
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Geen (gewone produk)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="geen">Geen (gewone produk)</SelectItem>
+                  {lmsKursusse.map(k => (
+                    <SelectItem key={k.id} value={k.id}>{k.titel}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Foto (opsioneel)</Label>

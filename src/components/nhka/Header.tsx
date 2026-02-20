@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNHKA } from '@/contexts/NHKAContext';
 import { useOffline } from '@/contexts/OfflineContext';
 import { supabase } from '@/lib/supabase';
-import { getRolLabel, isHoofAdmin, getLidmaatDisplayNaam } from '@/types/nhka';
+import { getRolLabel, isHoofAdmin, isAdmin, isLeier, getLidmaatDisplayNaam } from '@/types/nhka';
 import {
   Menu,
   Bell,
@@ -77,7 +77,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
   }, []);
 
   // Count unresolved crises
-  const unresolvedCrises = krisisse.filter(k => k.status !== 'opgelos').length;
+  const canSeeCrises = currentUser && (isAdmin(currentUser.rol) || isLeier(currentUser.rol) || currentUser.rol === 'predikant');
+  const unresolvedCrises = canSeeCrises ? krisisse.filter(k => k.status !== 'opgelos').length : 0;
 
   const isHoofAdminUser = currentUser && isHoofAdmin(currentUser.rol);
 
@@ -156,8 +157,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
           <div className="flex items-center gap-1 sm:gap-2">
             {/* Connection Status - baie kompak */}
             <div className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg text-[10px] sm:text-xs font-medium ${isOnline
-                ? 'bg-green-500/20 text-green-300'
-                : 'bg-red-500/20 text-red-300'
+              ? 'bg-green-500/20 text-green-300'
+              : 'bg-red-500/20 text-red-300'
               }`}>
               {isOnline ? (
                 <Wifi className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -171,10 +172,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
               <button
                 onClick={handleManageQueue}
                 className={`flex items-center gap-1 px-1.5 py-1 rounded-lg text-[10px] sm:text-xs font-medium transition-colors ${conflictCount > 0
-                    ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
-                    : failedCount > 0
-                      ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
-                      : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
+                  ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                  : failedCount > 0
+                    ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                    : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
                   }`}
                 title={`${pendingCount} wagend, ${failedCount} misluk, ${conflictCount} konflikte`}
               >
@@ -216,8 +217,9 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
             {/* Notifications - kleiner */}
             <button
-              className="relative p-1.5 sm:p-2 rounded-lg hover:bg-white/10 transition-colors"
-              title="Kennisgewings"
+              onClick={() => canSeeCrises && onNavigate && onNavigate('krisis')}
+              className={`relative p-1.5 sm:p-2 rounded-lg hover:bg-white/10 transition-colors ${!canSeeCrises ? 'opacity-50 cursor-default' : ''}`}
+              title={canSeeCrises ? 'Kennisgewings – Onopgeloste krisisse' : 'Kennisgewings'}
             >
               <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               {unresolvedCrises > 0 && (

@@ -12,25 +12,32 @@
  * - Case-insensitive file search for better Windows/Linux compat.
  */
 
+// Raise limits first (MBZ extraction can use a lot of memory)
+ini_set('memory_limit', '1024M');
+set_time_limit(300);
+
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
-// 1. Configuration & Auth
+// 1. Configuration & Auth (same Supabase as frontend – lms IDs are UUIDs)
 // -----------------------------------------------------------------------------
-$SUPABASE_URL = 'https://jdxxtnjvyaujrxueuoge.databasepad.com';
-$SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImFhMDUzODJlLWE1NGMtNDY4ZC05YjRlLTgzMTNmNTVkNGRiMyJ9.eyJwcm9qZWN0SWQiOiJqZHh4dG5qdnlhdWpyeHVldW9nZSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY1NDE3OTM0LCJleHAiOjIwODA3Nzc5MzQsImlzcyI6ImZhbW91cy5kYXRhYmFzZXBhZCIsImF1ZCI6ImZhbW91cy5jbGllbnRzIn0.vaJs6wpz0dfoobRzVCRG82q1psyeRdoVXtEqW3mZwA0';
+$SUPABASE_URL = getenv('SUPABASE_URL') ?: 'https://wskkdnzeqgdjxqozyfut.supabase.co';
+$SUPABASE_KEY = getenv('SUPABASE_ANON_KEY') ?: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indza2tkbnplcWdkanhxb3p5ZnV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxNTI0NjksImV4cCI6MjA4NDcyODQ2OX0.-3meCJRS113LZvD6sSk0P5--Axrnuk39bjAnCK9BSv0';
 $AUTH_TOKEN = $SUPABASE_KEY;
 
-$TEMP_DIR = __DIR__ . '/../temp_import_' . uniqid();
+// Use system temp dir (writable on shared hosts); avoid __DIR__/../ which often is not
+$TEMP_DIR = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'lms_import_' . uniqid('', true);
 
 // 2. Helpers
 // -----------------------------------------------------------------------------
 
 function sendResponse($success, $message, $data = [], $code = 200) {
     global $TEMP_DIR;
+    if (function_exists('ob_get_length') && ob_get_length()) ob_end_clean();
     recursiveDelete($TEMP_DIR);
     http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => $success, 'message' => $message, 'data' => $data]);
     exit();
 }
@@ -302,38 +309,45 @@ function parseQTIQuiz($filePath, $lessonId) {
 // -----------------------------------------------------------------------------
 
 function parseMoodleQuestionBank($dir) {
-    if (!file_exists("$dir/questions.xml")) return [];
+    $qPath = "$dir/questions.xml";
+    if (!file_exists($qPath)) {
+        $qPath = "$dir/course/questions.xml";
+    }
+    if (!file_exists($qPath)) return [];
 
-    $xml = simplexml_load_file("$dir/questions.xml", 'SimpleXMLElement', LIBXML_NOCDATA);
+    $xml = @simplexml_load_file($qPath, 'SimpleXMLElement', LIBXML_NOCDATA);
+    if ($xml === false) return [];
+
     $bank = [];
 
     // Moodle questions are usually nested in categories
     $questions = $xml->xpath('//question');
-    
+    if (empty($questions)) return [];
+
     foreach ($questions as $q) {
         $id = (string)$q['id'];
         $type = (string)$q->qtype; // multichoice, truefalse, shortanswer, etc.
-        $text = (string)$q->questiontext;
+        // questiontext can be <questiontext><text>CDATA</text></questiontext>
+        $text = (string)($q->questiontext->text ?? $q->questiontext);
         
         // Skip 'category' pseudo-questions
         if ($type === 'category') continue;
 
         $qData = [
             'type' => 'text', // default
-            'text' => strip_tags($text),
+            'text' => trim(strip_tags($text)) ?: 'Vraag ' . $id,
             'options' => null,
             'answer' => '',
             'points' => (int)$q->defaultmark
         ];
 
-        if ($type === 'multichoice') {
+        if ($type === 'multichoice' && isset($q->answers->answer)) {
             $qData['type'] = 'mcq';
             $choices = [];
             $correctIndex = 0;
             $idx = 0;
-
             foreach ($q->answers->answer as $ans) {
-                $choices[] = strip_tags((string)$ans->answertext);
+                $choices[] = strip_tags((string)($ans->answertext->text ?? $ans->answertext));
                 if ((float)$ans->fraction > 0.9) { // 1.0 = 100%
                     $correctIndex = $idx;
                 }
@@ -342,14 +356,12 @@ function parseMoodleQuestionBank($dir) {
             $qData['options'] = ['choices' => $choices];
             $qData['answer'] = (string)$correctIndex;
 
-        } elseif ($type === 'truefalse') {
+        } elseif ($type === 'truefalse' && isset($q->answers->answer)) {
             $qData['type'] = 'true_false';
             // Moodle stores it as answer IDs usually, but let's see fraction
             // Typically two answers: True and False.
             foreach ($q->answers->answer as $ans) {
-                $txt = strip_tags((string)$ans->answertext);
-                // Moodle usually localizes "True"/"False", but often it's "True" or "False" in english backups
-                // Check fraction
+                $txt = strip_tags((string)($ans->answertext->text ?? $ans->answertext));
                 if ((float)$ans->fraction > 0.9) {
                     $qData['answer'] = (stripos($txt, 'true') !== false || stripos($txt, 'waar') !== false) ? 'true' : 'false';
                 }
@@ -361,48 +373,75 @@ function parseMoodleQuestionBank($dir) {
     return $bank;
 }
 
-function parseMoodleMBZ($dir) {
+function parseMoodleMBZ($dir, $opts = []) {
     if (!file_exists("$dir/moodle_backup.xml")) {
         return ['success' => false, 'message' => "Invalid Moodle backup. 'moodle_backup.xml' missing."];
     }
 
-    // 1. Load Question Bank
+    // 1. Load Question Bank (for quiz questions)
     $questionBank = parseMoodleQuestionBank($dir);
 
     $xml = simplexml_load_file("$dir/moodle_backup.xml");
     $courseName = (string)$xml->information->original_course_fullname;
     $courseShort = (string)$xml->information->original_course_shortname;
 
-    $courseId = supabaseInsert('lms_kursusse', [
-        'titel' => $courseName,
-        'beskrywing' => "Ingevoer vanaf Moodle (.mbz) - $courseShort",
-        'kategorie' => 'Ander', 'vlak' => 'beginner', 'prys' => 0,
-        'is_gratis' => true, 'duur_minute' => 0, 'is_aktief' => true, 'is_gepubliseer' => true
-    ]);
+    $importIntoCourse = isset($opts['course_id']) && $opts['course_id'] !== '' && $opts['course_id'] !== '0';
+    $targetModuleId = (isset($opts['module_id']) && $opts['module_id'] !== '' && $opts['module_id'] !== '0') ? trim((string)$opts['module_id']) : null;
 
-    if (!$courseId) return ['success' => false, 'message' => "Database Insert Failed (Course)."];
-
-    $contents = $xml->information->contents;
-    $sectionMap = []; 
-
-    if (isset($contents->sections->section)) {
-        foreach ($contents->sections->section as $sec) {
-            $sid = (string)$sec->sectionid;
-            $title = (string)$sec->title;
-            // Bestaande logic OK
-            $checkPath = "$dir/sections/section_$sid/section.xml";
-            if (file_exists($checkPath)) {
-                $sXml = simplexml_load_file($checkPath);
-                if (isset($sXml->name) && (string)$sXml->name !== '') $title = (string)$sXml->name;
-            }
-            if (!$title) $title = "Afdeling $sid";
-
-            $mid = supabaseInsert('lms_modules', [
-                'kursus_id' => $courseId, 'titel' => $title, 'volgorde' => (int)$sid, 'is_aktief' => true
+    if ($importIntoCourse) {
+        $courseId = trim((string)$opts['course_id']);
+        if (!$targetModuleId) {
+            $newModId = supabaseInsert('lms_modules', [
+                'kursus_id' => $courseId,
+                'titel' => 'Ingevoer vanaf MBZ - ' . date('Y-m-d H:i'),
+                'volgorde' => 999,
+                'is_aktief' => true
             ]);
-            $sectionMap[$sid] = $mid;
+            if (!$newModId) return ['success' => false, 'message' => "Kon nie nuwe module skep nie."];
+            $targetModuleId = $newModId;
+        }
+        // All sections map to this one module
+        $sectionMap = [];
+        if (isset($xml->information->contents->sections->section)) {
+            foreach ($xml->information->contents->sections->section as $sec) {
+                $sectionMap[(string)$sec->sectionid] = $targetModuleId;
+            }
+        }
+        // Ensure every activity's sectionid maps to target module
+        if (isset($xml->information->contents->activities->activity)) {
+            foreach ($xml->information->contents->activities->activity as $act) {
+                $sectionMap[(string)$act->sectionid] = $targetModuleId;
+            }
+        }
+    } else {
+        $courseId = supabaseInsert('lms_kursusse', [
+            'titel' => $courseName,
+            'beskrywing' => "Ingevoer vanaf Moodle (.mbz) - $courseShort",
+            'kategorie' => 'Ander', 'vlak' => 'beginner', 'prys' => 0,
+            'is_gratis' => true, 'duur_minute' => 0, 'is_aktief' => true, 'is_gepubliseer' => true
+        ]);
+        if (!$courseId) return ['success' => false, 'message' => "Database Insert Failed (Course)."];
+        $sectionMap = [];
+        $contents = $xml->information->contents;
+        if (isset($contents->sections->section)) {
+            foreach ($contents->sections->section as $sec) {
+                $sid = (string)$sec->sectionid;
+                $title = (string)$sec->title;
+                $checkPath = "$dir/sections/section_$sid/section.xml";
+                if (file_exists($checkPath)) {
+                    $sXml = simplexml_load_file($checkPath);
+                    if (isset($sXml->name) && (string)$sXml->name !== '') $title = (string)$sXml->name;
+                }
+                if (!$title) $title = "Afdeling $sid";
+                $mid = supabaseInsert('lms_modules', [
+                    'kursus_id' => $courseId, 'titel' => $title, 'volgorde' => (int)$sid, 'is_aktief' => true
+                ]);
+                $sectionMap[$sid] = $mid;
+            }
         }
     }
+
+    $contents = $xml->information->contents;
 
     if (isset($contents->activities->activity)) {
         $order = 0;
@@ -420,9 +459,14 @@ function parseMoodleMBZ($dir) {
             $type = 'teks'; 
             
             if ($mod === 'page' || $mod === 'resource') {
-                if (file_exists("$actDir/$mod.xml")) {
-                     $aXml = simplexml_load_file("$actDir/$mod.xml");
-                     $content = (string)($aXml->intro ?? $aXml->page->content ?? '');
+                $modPath = findFileCaseInsensitive("$actDir/$mod.xml") ?: "$actDir/$mod.xml";
+                if (file_exists($modPath)) {
+                     $aXml = simplexml_load_file($modPath, 'SimpleXMLElement', LIBXML_NOCDATA);
+                     if ($aXml === false) { $content = ''; } else {
+                         // Moodle: activity root has ->page->content, or root is ->content (page.xml), or ->intro
+                         $content = (string)($aXml->page->content ?? $aXml->content ?? $aXml->intro ?? '');
+                         $content = html_entity_decode(html_entity_decode($content));
+                     }
                 }
             } elseif ($mod === 'url') {
                  if (file_exists("$actDir/url.xml")) {
@@ -447,7 +491,8 @@ function parseMoodleMBZ($dir) {
                      if ($pagesNode && isset($pagesNode->page)) {
                          foreach ($pagesNode->page as $page) {
                              $pageTitle = (string)$page->title;
-                             $pageContent = (string)$page->contents;
+                             // Moodle: contents can be <contents><content>CDATA</content></contents> or <contents>CDATA</contents>
+                             $pageContent = (string)($page->contents->content ?? $page->contents ?? $page->content ?? '');
                              
                              // Moodle content can be double encoded. Decode twice to be safe.
                              // Example: &lt;p&gt; -> <p>
@@ -827,9 +872,6 @@ function parseIMSCC($dir) {
 // 6. Main Execution
 // -----------------------------------------------------------------------------
 
-// Increase limits for large downloads
-set_time_limit(300); // 5 minutes
-ini_set('memory_limit', '512M');
 ini_set('display_errors', 0); // Ensure errors don't leak into JSON
 ini_set('log_errors', 1);
 
@@ -841,16 +883,18 @@ function debug_log($msg) {
     error_log("$time $msg\n", 3, $logFile);
 }
 
-// Shutdown Function to catch Fatal Errors/Timeouts
+// Shutdown Function to catch Fatal Errors/Timeouts - always return JSON so frontend can show message
 register_shutdown_function(function() {
     $error = error_get_last();
-    if ($error && ($error['type'] === E_ERROR || $error['type'] === E_PARSE || $error['type'] === E_CORE_ERROR || $error['type'] === E_COMPILE_ERROR || $error['type'] === E_USER_ERROR)) {
-        ob_end_clean(); // Discard any partial output
-        http_response_code(500);
-        header('Content-Type: application/json');
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        if (function_exists('ob_get_length') && ob_get_length()) @ob_end_clean();
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+        }
         echo json_encode([
-            'success' => false, 
-            'message' => "Fatal Error: {$error['message']} in {$error['file']}:{$error['line']}",
+            'success' => false,
+            'message' => 'Bedienerfout: ' . (isset($error['message']) ? $error['message'] : 'Onbekend') . '. Probeer die .mbz lêer direk op te laai in plaas van Google Drive.',
             'fatal' => true
         ]);
     }
@@ -887,12 +931,14 @@ try {
     }
 
     // Option 2: Google Drive URL
+    $input = [];
     if (!$useUploadedFile) {
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input)) $input = $_POST;
-        if (!isset($input['drive_url'])) sendResponse(false, 'Voeg asseblief \'n Google Drive skakel in OF laai die .mbz lêer direk op.', [], 400);
+        $rawInput = file_get_contents('php://input');
+        $input = is_string($rawInput) ? json_decode($rawInput, true) : null;
+        if (!is_array($input)) $input = isset($_POST) && is_array($_POST) ? $_POST : [];
+        if (empty($input['drive_url']) || !is_string($input['drive_url'])) sendResponse(false, 'Voeg asseblief \'n Google Drive skakel in OF laai die .mbz lêer direk op.', [], 400);
 
-        $fileId = getDriveFileId($input['drive_url']);
+        $fileId = getDriveFileId(trim($input['drive_url']));
         if (!$fileId) sendResponse(false, 'Ongeldige Google Drive skakel. Plak die volledige skakel (bv. drive.google.com/file/d/...)', [], 400);
 
         debug_log("File ID Found: $fileId. Starting download...");
@@ -939,30 +985,36 @@ try {
 
     if ($isZip) {
         debug_log("Detected ZIP format.");
-        // ZIP (IMSCC)
         $zip = new ZipArchive;
         if ($zip->open($zipPath) === TRUE) {
             $zip->extractTo($TEMP_DIR);
             $zip->close();
+            unset($zip);
             $extractSuccess = true;
             debug_log("ZIP extracted.");
         } else {
-             debug_log("Failed to open ZIP.");
+            debug_log("Failed to open ZIP.");
         }
+        if (function_exists('gc_collect_cycles')) gc_collect_cycles();
     } elseif ($isGzip) {
         debug_log("Detected GZIP format.");
         // GZIP (MBZ)
-        $fSizeBefore = filesize($zipPath); // Bug fix: check size BEFORE rename
+        $fSizeBefore = filesize($zipPath);
         $tarPath = $TEMP_DIR . '/backup.tar.gz';
         rename($zipPath, $tarPath);
         try {
             $phar = new PharData($tarPath);
             $phar->extractTo($TEMP_DIR);
+            unset($phar);
+            if (file_exists($tarPath)) unlink($tarPath);
             $extractSuccess = true;
             debug_log("GZIP/TAR extracted. Size: $fSizeBefore");
-        } catch (Exception $e) { 
+        } catch (Exception $e) {
+            if (isset($phar)) unset($phar);
+            if (file_exists($tarPath)) @unlink($tarPath);
             debug_log("PharData Extraction Error: " . $e->getMessage() . " Size: $fSizeBefore");
         }
+        if (function_exists('gc_collect_cycles')) gc_collect_cycles();
     } else {
         debug_log("Unknown header: " . bin2hex($header));
     }
@@ -973,12 +1025,22 @@ try {
         sendResponse(false, "Extraction failed. Unknown format. Header: $hexHeader, Size: $fSize bytes.", [], 400);
     }
 
+    // Import target (optional: existing course + module; IDs are UUIDs)
+    $importOpts = [];
+    if ($useUploadedFile) {
+        if (isset($_POST['import_kursus_id']) && $_POST['import_kursus_id'] !== '') $importOpts['course_id'] = trim((string)$_POST['import_kursus_id']);
+        if (isset($_POST['import_module_id']) && $_POST['import_module_id'] !== '') $importOpts['module_id'] = trim((string)$_POST['import_module_id']);
+    } else {
+        if (!empty($input['import_kursus_id'])) $importOpts['course_id'] = trim((string)$input['import_kursus_id']);
+        if (!empty($input['import_module_id'])) $importOpts['module_id'] = trim((string)$input['import_module_id']);
+    }
+
     // Parse
     debug_log("Parsing extracted contents...");
     $result = [];
     if (file_exists("$TEMP_DIR/moodle_backup.xml") || file_exists("$TEMP_DIR/groups.xml") && file_exists("$TEMP_DIR/files.xml")) {
         debug_log("Identified Moodle Backup.");
-        $result = parseMoodleMBZ($TEMP_DIR);
+        $result = parseMoodleMBZ($TEMP_DIR, $importOpts);
     } elseif (file_exists("$TEMP_DIR/imsmanifest.xml")) {
         debug_log("Identified IMSCC.");
         $result = parseIMSCC($TEMP_DIR);
@@ -1006,8 +1068,8 @@ try {
     }
 
 } catch (Throwable $e) {
-    if (isset($TEMP_DIR)) debug_log("Exception: " . $e->getMessage());
-    ob_end_clean(); // Discard any HTML output
-    sendResponse(false, "Server Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine(), [], 500);
+    if (isset($TEMP_DIR)) @debug_log("Exception: " . $e->getMessage());
+    if (function_exists('ob_get_length') && ob_get_length()) @ob_end_clean();
+    sendResponse(false, "Invoerfout: " . $e->getMessage() . ". Probeer die .mbz lêer direk op te laai.", [], 500);
 }
 ?>

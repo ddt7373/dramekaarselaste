@@ -168,9 +168,11 @@ const MenuBuilder = () => {
         { id: 'besoekpunt-toewysing', label: 'Besoekpunt Toewysing', type: 'item' },
         { id: 'konsistorieboek', label: 'Konsistorieboek', type: 'item' },
         { id: 'gemeente-kaart', label: 'Gemeente Kaart', type: 'item' },
+        { id: 'denominasie-kaart', label: 'Alle gemeentes', type: 'item' },
         { id: 'artikel-portaal', label: 'Artikels-portaal', type: 'item' },
         { id: 'redaksie-portaal', label: 'Redaksie-portaal', type: 'item' },
         { id: 'omsendbrief-kletsbot', label: 'Omsendbrief Kletsbot', type: 'item' },
+        { id: 'musiek', label: 'Musiek', type: 'item' },
     ]);
 
     const sensors = useSensors(

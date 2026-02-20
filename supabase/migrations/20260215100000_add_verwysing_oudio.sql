@@ -1,0 +1,2 @@
+-- Skipped due to missing table dependency
+-- Original content was for adding verwysing_oudio to musiek_liedere

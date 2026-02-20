@@ -1,3 +1,10 @@
+# After deploy: avoid serving cached index.html (so new asset hashes load)
+<FilesMatch "index\.html$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </IfModule>
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /

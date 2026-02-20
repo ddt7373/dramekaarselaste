@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNHKA } from '@/contexts/NHKAContext';
 import { useOffline } from '@/contexts/OfflineContext';
-import { getKrisisTipeLabel, getKrisisStatusLabel, isAdmin, KrisisStatus, isRestrictedLeader, KrisisTipe } from '@/types/nhka';
+import { getKrisisTipeLabel, getKrisisStatusLabel, isAdmin, KrisisStatus, isRestrictedLeader, KrisisTipe, isLeier } from '@/types/nhka';
 import {
   AlertTriangle,
   Plus,
@@ -37,6 +37,7 @@ const KrisisVerslag: React.FC = () => {
   if (!currentUser) return null;
 
   const isUserAdmin = isAdmin(currentUser.rol);
+  const canManageKrisis = isUserAdmin || isLeier(currentUser.rol) || currentUser.rol === 'predikant';
   const lidmate = gebruikers.filter(g => {
     if (g.rol !== 'lidmaat') return false;
     if (isRestrictedLeader(currentUser.rol)) {
@@ -490,7 +491,7 @@ const KrisisVerslag: React.FC = () => {
                         <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(krisis.status)}`}>
                           {getKrisisStatusLabel(krisis.status)}
                         </span>
-                        {isUserAdmin && krisis.status !== 'opgelos' && isOnline && (
+                        {canManageKrisis && krisis.status !== 'opgelos' && isOnline && (
                           <button
                             onClick={() => setSelectedKrisis(selectedKrisis === krisis.id ? null : krisis.id)}
                             className="p-1 rounded hover:bg-gray-100 transition-colors"
@@ -516,7 +517,7 @@ const KrisisVerslag: React.FC = () => {
                     </p>
 
                     {/* Status Update Options */}
-                    {selectedKrisis === krisis.id && isUserAdmin && isOnline && (
+                    {selectedKrisis === krisis.id && canManageKrisis && isOnline && (
                       <div className="mt-3 pt-3 border-t border-gray-100">
                         <p className="text-xs font-medium text-gray-500 mb-2">Dateer Status Op:</p>
                         <div className="flex flex-wrap gap-2">
@@ -540,7 +541,7 @@ const KrisisVerslag: React.FC = () => {
                     )}
 
                     {/* Offline notice for status update */}
-                    {selectedKrisis === krisis.id && isUserAdmin && !isOnline && (
+                    {selectedKrisis === krisis.id && canManageKrisis && !isOnline && (
                       <div className="mt-3 pt-3 border-t border-gray-100">
                         <p className="text-xs text-amber-600 flex items-center gap-1">
                           <WifiOff className="w-3 h-3" />

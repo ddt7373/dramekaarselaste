@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNHKA } from '@/contexts/NHKAContext';
-import { MessageCircle, Send, Loader2, Download, ExternalLink } from 'lucide-react';
+import { MessageCircle, Send, Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -19,7 +19,22 @@ const OmsendbriefKletsbot: React.FC = () => {
   const [vraag, setVraag] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchYears = async () => {
+      const { data, error } = await supabase
+        .from('omsendbrief_dokumente')
+        .select('created_at')
+        .not('created_at', 'is', null);
+      if (error) return;
+      const years = [...new Set((data || []).map((r) => new Date(r.created_at).getFullYear()))].sort((a, b) => b - a);
+      setAvailableYears(years);
+    };
+    fetchYears();
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -29,17 +44,97 @@ const OmsendbriefKletsbot: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
+  /** Determine MIME type from file extension so the browser opens the correct application */
+  const getMimeType = (name: string): string => {
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    const map: Record<string, string> = {
+      pdf: 'application/pdf',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      doc: 'application/msword',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      xls: 'application/vnd.ms-excel',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ppt: 'application/vnd.ms-powerpoint',
+      txt: 'text/plain',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+    };
+    return map[ext] || 'application/octet-stream';
+  };
+
   const handleDownloadDocument = async (filename: string) => {
     try {
+      // Look up the document — get content and storage_path
       const { data: doc, error: docErr } = await supabase
         .from('omsendbrief_dokumente')
-        .select('id')
+        .select('id, content, storage_path, original_file_url')
         .eq('filename', filename)
         .maybeSingle();
       if (docErr || !doc) {
         toast.error('Kon nie dokument vind nie');
         return;
       }
+
+      // Option 1: Try to get a signed URL from Supabase Storage (works even for private buckets)
+      if (doc.storage_path) {
+        const { data: signedData, error: signedErr } = await supabase.storage
+          .from('omsendbrief-dokumente')
+          .createSignedUrl(doc.storage_path, 300); // 5-minute signed URL
+        if (!signedErr && signedData?.signedUrl) {
+          // Use signed URL — open in new tab for PDF, or download for other types
+          const ext = filename.split('.').pop()?.toLowerCase() || '';
+          if (ext === 'pdf') {
+            window.open(signedData.signedUrl, '_blank');
+          } else {
+            const a = document.createElement('a');
+            a.href = signedData.signedUrl;
+            a.download = filename;
+            a.click();
+          }
+          toast.success('Oorspronklike dokument afgelaai');
+          return;
+        }
+
+        // Fallback: direct download from storage
+        const { data: fileData, error: fileErr } = await supabase.storage
+          .from('omsendbrief-dokumente')
+          .download(doc.storage_path);
+        if (!fileErr && fileData) {
+          const mimeType = getMimeType(filename);
+          const blob = new Blob([fileData], { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+          toast.success('Oorspronklike dokument afgelaai');
+          return;
+        }
+      }
+
+      // Option 2: If there's a public URL, open it
+      if (doc.original_file_url) {
+        window.open(doc.original_file_url, '_blank');
+        return;
+      }
+
+      // Option 3: Download the full text content from the database (last resort)
+      const textContent = doc.content;
+      if (textContent && textContent.trim()) {
+        const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename.replace(/\.[^.]+$/, '') + '.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.info('Slegs teksinhoud was beskikbaar — oorspronklike lêer nie gevind nie.');
+        return;
+      }
+
+      // Fallback: concatenate chunks
       const { data: chunks, error: chunkErr } = await supabase
         .from('omsendbrief_chunks')
         .select('content, chunk_index')
@@ -57,9 +152,9 @@ const OmsendbriefKletsbot: React.FC = () => {
       a.download = filename.replace(/\.[^.]+$/, '') + '.txt';
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('Dokument afgelaai');
+      toast.info('Slegs teksinhoud was beskikbaar — oorspronklike lêer nie gevind nie.');
     } catch {
-      toast.error('Afgelaai misluk');
+      toast.error('Aflaai misluk');
     }
   };
 
@@ -86,6 +181,7 @@ const OmsendbriefKletsbot: React.FC = () => {
             vraag: trimmed,
             gebruiker_id: currentUser?.id || null,
             gemeente_id: currentGemeente?.id || null,
+            filter_year: filterYear,
           },
         },
       });
@@ -127,6 +223,27 @@ const OmsendbriefKletsbot: React.FC = () => {
         <p className="text-sm text-gray-600 mt-1">
           Alle omsendbriewe vanaf 2022 kan hier ondervra word. Tik jou vraag in die blokkie onderaan en druk Stuur.
         </p>
+        {availableYears.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="omsendbrief-jaar" className="text-sm font-medium text-[#002855]">
+              Filter op jaar (oplaai-jaar):
+            </label>
+            <select
+              id="omsendbrief-jaar"
+              value={filterYear ?? ''}
+              onChange={(e) => setFilterYear(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+              className="rounded-lg border-2 border-[#002855]/30 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-[#002855] focus:border-[#002855] outline-none"
+            >
+              <option value="">Alle jare</option>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            {filterYear != null && (
+              <span className="text-xs text-gray-500">Slegs dokumente van {filterYear}</span>
+            )}
+          </div>
+        )}
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
           <strong>Wenk:</strong> Stel jou vraag so volledig as moontlik. Moenie net &quot;lisensie&quot; tik nie – eerder: &quot;Wat is die voordele van die Microsoft 365 lisensie?&quot;
         </p>
@@ -135,79 +252,64 @@ const OmsendbriefKletsbot: React.FC = () => {
       <Card className="overflow-hidden flex flex-col">
         {/* Gesprek-area */}
         <div className="h-[380px] overflow-y-auto p-4 space-y-4 flex-1">
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                <MessageCircle className="w-14 h-14 text-gray-300 mb-3" />
-                <p className="text-gray-500 max-w-sm font-medium">
-                  Tik jou vraag onderaan en druk Stuur. Die Kletsbot sal antwoord op grond van die omsendbriewe.
-                </p>
-              </div>
-            )}
-            {messages.map((msg) => (
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center py-8">
+              <MessageCircle className="w-14 h-14 text-gray-300 mb-3" />
+              <p className="text-gray-500 max-w-sm font-medium">
+                Tik jou vraag onderaan en druk Stuur. Die Kletsbot sal antwoord op grond van die omsendbriewe.
+              </p>
+            </div>
+          )}
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
               <div
-                key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                    msg.role === 'user'
-                      ? 'bg-[#002855] text-white'
-                      : 'bg-gray-100 text-gray-900'
+                className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user'
+                  ? 'bg-[#002855] text-white'
+                  : 'bg-gray-100 text-gray-900'
                   }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  {msg.bronne && msg.bronne.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-200/50">
-                      <p className="text-xs font-semibold text-gray-600 mb-2">Bronne:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {(() => {
-                          const docMap = new Map<string, { url?: string; filename?: string }>();
-                          msg.bronne.forEach((b) => {
-                            if (b.dokument && !docMap.has(b.dokument)) docMap.set(b.dokument, { url: b.original_file_url, filename: b.filename });
-                          });
-                          return [...docMap.entries()].map(([dokument, { url, filename }]) =>
-                            url ? (
-                              <a
-                                key={dokument}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-xs text-[#002855] bg-white/60 hover:bg-white/90 rounded-lg px-2 py-1 transition-colors cursor-pointer border border-transparent hover:border-[#002855]/30"
-                                title="Bekyk/laai PDF"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="font-medium underline decoration-dotted">{dokument}</span>
-                              </a>
-                            ) : (
-                              <button
-                                key={dokument}
-                                type="button"
-                                onClick={() => handleDownloadDocument(filename || dokument)}
-                                className="flex items-center gap-1.5 text-xs text-[#002855] bg-white/60 hover:bg-white/90 rounded-lg px-2 py-1 transition-colors cursor-pointer border border-transparent hover:border-[#002855]/30"
-                                title="Laai teks af"
-                              >
-                                <Download className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="font-medium underline decoration-dotted">{dokument}</span>
-                              </button>
-                            )
-                          );
-                        })()}
-                      </div>
+              >
+                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                {msg.bronne && msg.bronne.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200/50">
+                    <p className="text-xs font-semibold text-gray-600 mb-2">Bronne:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(() => {
+                        const docMap = new Map<string, { url?: string; filename?: string }>();
+                        msg.bronne.forEach((b) => {
+                          if (b.dokument && !docMap.has(b.dokument)) docMap.set(b.dokument, { url: b.original_file_url, filename: b.filename });
+                        });
+                        return [...docMap.entries()].map(([dokument, { filename }]) => (
+                          <button
+                            key={dokument}
+                            type="button"
+                            onClick={() => handleDownloadDocument(filename || dokument)}
+                            className="flex items-center gap-1.5 text-xs text-[#002855] bg-white/60 hover:bg-white/90 rounded-lg px-2 py-1 transition-colors cursor-pointer border border-transparent hover:border-[#002855]/30"
+                            title="Laai oorspronklike dokument af"
+                          >
+                            <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="font-medium underline decoration-dotted">{dokument}</span>
+                          </button>
+                        ));
+                      })()}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-100 rounded-2xl px-4 py-3 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-[#002855]" />
-                  <span className="text-sm text-gray-600">Dink...</span>
-                </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 rounded-2xl px-4 py-3 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-[#002855]" />
+                <span className="text-sm text-gray-600">Dink...</span>
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
         {/* Vraag-blokkie ondertoe – altyd aan die onderkant */}
         <div className="p-4 border-t-2 border-[#002855]/20 bg-[#002855]/5 shrink-0">

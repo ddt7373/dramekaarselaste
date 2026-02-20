@@ -35,11 +35,17 @@ import {
   List,
   Link as LinkIcon,
   Image as ImageIcon,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
   Upload,
   File as FileIcon,
   Download,
-  GripVertical
+  GripVertical,
+  FileEdit
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import {
   DndContext,
   closestCenter,
@@ -289,7 +295,7 @@ const SortableModuleItem = ({
             items={module.lesse || []}
             strategy={verticalListSortingStrategy}
           >
-            {(module.lesse || []).map((les) => (
+            {(Array.isArray(module.lesse) ? module.lesse : []).map((les) => (
               <SortableLesItem
                 key={les.id}
                 les={les}
@@ -365,13 +371,19 @@ const LMSKursusBestuur: React.FC = () => {
     bylaes: [] as Bylae[]
   });
   const [uploading, setUploading] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const imageInputRef = React.useRef<HTMLInputElement>(null);
+  const videoFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Import State
   const [showImportModal, setShowImportModal] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importTargetKursusId, setImportTargetKursusId] = useState<string>('');
+  const [importModuleId, setImportModuleId] = useState<string>('');
+  const [importModulesList, setImportModulesList] = useState<{ id: number; titel: string }[]>([]);
+  const [lesInhoudView, setLesInhoudView] = useState<'edit' | 'preview'>('edit');
   const importFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const kategorieë = [
@@ -601,7 +613,12 @@ const LMSKursusBestuur: React.FC = () => {
       foto_url: kursus.foto_url || '',
       video_voorskou_url: kursus.video_voorskou_url || '',
       vereistes: kursus.vereistes || '',
-      wat_jy_sal_leer: kursus.wat_jy_sal_leer || [''],
+      wat_jy_sal_leer: (() => {
+        const v = kursus.wat_jy_sal_leer;
+        if (Array.isArray(v)) return v;
+        if (typeof v === 'string') { try { const p = JSON.parse(v); return Array.isArray(p) ? p : ['']; } catch { return ['']; } }
+        return [''];
+      })(),
       is_vbo_geskik: kursus.is_vbo_geskik ?? false,
       vbo_krediete: kursus.vbo_krediete ?? 5,
       is_missionaal: kursus.is_missionaal ?? false
@@ -880,6 +897,52 @@ const LMSKursusBestuur: React.FC = () => {
     }
   };
 
+  // Supabase Storage limiet: Free = 50 MB. Verander in Dashboard → Project Settings → Storage indien jy 'n hoër limiet het.
+  const MAX_VIDEO_UPLOAD_MB = 50;
+  const MAX_VIDEO_UPLOAD_BYTES = MAX_VIDEO_UPLOAD_MB * 1024 * 1024;
+
+  const handleVideoFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const validTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Ondersteun net video-lêers: MP4, WebM, Ogg, MOV');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > MAX_VIDEO_UPLOAD_BYTES) {
+      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+      toast.error(`Video te groot (${sizeMB} MB). Maksimum toegelaat: ${MAX_VIDEO_UPLOAD_MB} MB. Komprimeer die video of gebruik 'n eksterne skakel (bv. YouTube).`);
+      event.target.value = '';
+      return;
+    }
+    try {
+      setUploadingVideo(true);
+      const ext = file.name.split('.').pop() || 'mp4';
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `lesse-videos/${Date.now()}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('lms-content')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('lms-content')
+        .getPublicUrl(filePath);
+
+      setLesForm(prev => ({ ...prev, video_url: publicUrl }));
+      toast.success('Video opgelaai. Stoor die les om te behou.');
+    } catch (error: any) {
+      console.error('Video upload error:', error);
+      toast.error(error.message || 'Kon nie video oplaai nie');
+    } finally {
+      setUploadingVideo(false);
+      event.target.value = '';
+    }
+  };
+
   const handleInlineImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !selectedKursus) return;
@@ -903,7 +966,8 @@ const LMSKursusBestuur: React.FC = () => {
       // Insert markdown image syntax
       insertMarkdown(`![${file.name}](${publicUrl})`, '');
 
-      toast.success('Prent ingevoeg');
+      setLesInhoudView('preview');
+      toast.success('Prent ingevoeg – sien dit in Voorskou.');
     } catch (error: any) {
       console.error('Image upload error:', error);
       toast.error('Kon nie prent oplaai nie');
@@ -932,6 +996,49 @@ const LMSKursusBestuur: React.FC = () => {
       textarea.focus();
       textarea.setSelectionRange(start + prefix.length, end + prefix.length);
     }, 0);
+  };
+
+  const insertAlignment = (align: 'left' | 'center' | 'right' | 'justify') => {
+    insertMarkdown(`<div style="text-align: ${align}">`, '</div>');
+  };
+
+  const renderInhoudVoorskou = (content: string) => {
+    if (!content?.trim()) return <p className="text-gray-400 text-sm">Geen inhoud nog. Wissel na Redigeer om te tik of prente op te laai.</p>;
+    const isHtml = /<\/?(div|p|span|br|h[1-6]|ul|ol|li|table|img)[^>]*>/i.test(content);
+    if (isHtml) {
+      return (
+        <div
+          className="prose prose-sm max-w-none text-gray-700 [&_img]:rounded-lg [&_img]:shadow [&_img]:my-2 [&_img]:max-h-64"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+      );
+    }
+    const parts = content.split(/(<iframe.*?<\/iframe>)/gs);
+    return (
+      <div className="prose prose-sm max-w-none text-gray-700">
+        {parts.map((part, index) => {
+          if (part.toLowerCase().includes('<iframe') && part.toLowerCase().includes('</iframe>')) {
+            return <div key={index} className="my-2 [&_iframe]:max-w-full [&_iframe]:max-h-48" dangerouslySetInnerHTML={{ __html: part }} />;
+          }
+          if (!part.trim()) return null;
+          return (
+            <ReactMarkdown
+              key={index}
+              components={{
+                a: ({ node, ...props }) => <a {...props} className="text-[#D4A84B] hover:underline" target="_blank" rel="noopener noreferrer" />,
+                img: ({ node, ...props }) => (
+                  <span className="inline-block my-2 rounded-lg overflow-hidden shadow max-w-full">
+                    <img {...props} className="max-h-64 w-auto" />
+                  </span>
+                )
+              }}
+            >
+              {part}
+            </ReactMarkdown>
+          );
+        })}
+      </div>
+    );
   };
 
   const handleSaveLes = async () => {
@@ -1049,47 +1156,54 @@ const LMSKursusBestuur: React.FC = () => {
     }
   };
 
+  // When import target course changes, load its modules
+  useEffect(() => {
+    if (!importTargetKursusId) {
+      setImportModulesList([]);
+      setImportModuleId('');
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('lms_modules')
+        .select('id, titel')
+        .eq('kursus_id', importTargetKursusId)
+        .order('volgorde');
+      setImportModulesList(data || []);
+      setImportModuleId('');
+    })();
+  }, [importTargetKursusId]);
+
   const handleImportMoodle = async () => {
-    if (!driveLink && !importFile) {
-      toast.error('Voeg asseblief \'n Google Drive skakel in OF laai die .mbz lêer op');
+    if (!importFile) {
+      toast.error('Kies eers \'n .mbz lêer om op te laai');
       return;
     }
 
     try {
       setImporting(true);
-      toast.info('Besig om in te voer... Dit kan \'n rukkie neem.');
+      toast.info('Besig om in te voer (in leser)...');
 
-      let response: Response;
-      if (importFile) {
-        const formData = new FormData();
-        formData.append('file', importFile);
-        response = await fetch('/api/import-moodle.php', {
-          method: 'POST',
-          body: formData
-        });
-      } else {
-        response = await fetch('/api/import-moodle.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ drive_url: driveLink })
-        });
-      }
+      const { importMoodleFromFile } = await import('@/lib/importMoodleClient');
+      const result = await importMoodleFromFile(importFile, {
+        courseId: importTargetKursusId || undefined,
+        moduleId: importModuleId || undefined
+      });
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
+      if (!result.success) {
         throw new Error(result.message || 'Kon nie invoer nie');
       }
 
-      toast.success('Kursus suksesvol ingevoer!');
+      toast.success(importTargetKursusId ? 'Inhoud suksesvol by kursus ingevoer!' : 'Kursus suksesvol ingevoer!');
       setShowImportModal(false);
       setDriveLink('');
       setImportFile(null);
+      setImportTargetKursusId('');
+      setImportModuleId('');
       await fetchKursusse();
-
     } catch (error: any) {
       console.error('Import error:', error);
-      toast.error(error.message || 'Fout tydens invoer');
+      toast.error(error?.message || 'Fout tydens invoer');
     } finally {
       setImporting(false);
     }
@@ -1612,7 +1726,7 @@ const LMSKursusBestuur: React.FC = () => {
                       items={modules}
                       strategy={verticalListSortingStrategy}
                     >
-                      {modules.map((module, moduleIndex) => (
+                      {(modules || []).map((module, moduleIndex) => (
                         <SortableModuleItem
                           key={module.id}
                           module={module}
@@ -1631,13 +1745,14 @@ const LMSKursusBestuur: React.FC = () => {
                           onEditLes={(les) => {
                             setEditingLes(les);
                             setCurrentModuleId(module.id);
+                            const bylaeList = Array.isArray(les.bylaes) ? les.bylaes : (typeof les.bylaes === 'string' ? (() => { try { const p = JSON.parse(les.bylaes as string); return Array.isArray(p) ? p : []; } catch { return []; } })() : []);
                             setLesForm({
                               titel: les.titel,
                               tipe: les.tipe as any,
                               inhoud: les.inhoud || '',
                               video_url: les.video_url || '',
                               duur_minute: les.duur_minute,
-                              bylaes: Array.isArray(les.bylaes) ? les.bylaes : []
+                              bylaes: bylaeList
                             });
                             setShowLesModal(true);
                           }}
@@ -1772,12 +1887,32 @@ const LMSKursusBestuur: React.FC = () => {
                 </div>
 
                 {lesForm.tipe === 'video' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Video URL</label>
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Video (oplaai of URL)</label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="file"
+                        ref={videoFileInputRef}
+                        className="hidden"
+                        accept="video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.ogg,.mov"
+                        onChange={handleVideoFileUpload}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => videoFileInputRef.current?.click()}
+                        disabled={uploadingVideo}
+                      >
+                        {uploadingVideo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                        {uploadingVideo ? 'Laai op...' : 'Laai video op'}
+                      </Button>
+                      <span className="text-xs text-gray-500">MP4, WebM, Ogg, MOV · Maks. {MAX_VIDEO_UPLOAD_MB} MB</span>
+                    </div>
                     <Input
                       value={lesForm.video_url}
                       onChange={(e) => setLesForm({ ...lesForm, video_url: e.target.value })}
-                      placeholder="https://youtube.com/ of <iframe...>"
+                      placeholder="Of plak hier 'n video-URL (bv. YouTube, Vimeo of die opgelaai video se skakel)"
                     />
                   </div>
                 )}
@@ -1785,7 +1920,27 @@ const LMSKursusBestuur: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Inhoud</label>
                   <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="flex items-center gap-1 p-2 bg-gray-50 border-b border-gray-200">
+                    <div className="flex flex-wrap items-center gap-1 p-2 bg-gray-50 border-b border-gray-200">
+                      <span className="inline-flex border-r border-gray-200 pr-2 mr-1">
+                        <Button
+                          variant={lesInhoudView === 'edit' ? 'secondary' : 'ghost'}
+                          size="sm"
+                          onClick={() => setLesInhoudView('edit')}
+                          title="Redigeer teks"
+                        >
+                          <FileEdit className="w-4 h-4 mr-1" />
+                          Redigeer
+                        </Button>
+                        <Button
+                          variant={lesInhoudView === 'preview' ? 'secondary' : 'ghost'}
+                          size="sm"
+                          onClick={() => setLesInhoudView('preview')}
+                          title="Voorskou (sien prente en opmaak)"
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Voorskou
+                        </Button>
+                      </span>
                       <Button variant="ghost" size="sm" onClick={() => insertMarkdown('**', '**')} title="Bold">
                         <Bold className="w-4 h-4" />
                       </Button>
@@ -1801,6 +1956,20 @@ const LMSKursusBestuur: React.FC = () => {
                       <Button variant="ghost" size="sm" onClick={() => imageInputRef.current?.click()} title="Image">
                         <ImageIcon className="w-4 h-4" />
                       </Button>
+                      <span className="inline-flex border-l border-gray-200 pl-1 ml-1" aria-label="Alignment">
+                        <Button variant="ghost" size="sm" onClick={() => insertAlignment('left')} title="Links">
+                          <AlignLeft className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => insertAlignment('center')} title="Sentré">
+                          <AlignCenter className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => insertAlignment('right')} title="Regs">
+                          <AlignRight className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => insertAlignment('justify')} title="Blok-justify">
+                          <AlignJustify className="w-4 h-4" />
+                        </Button>
+                      </span>
                       <input
                         type="file"
                         ref={imageInputRef}
@@ -1809,14 +1978,20 @@ const LMSKursusBestuur: React.FC = () => {
                         onChange={handleInlineImageUpload}
                       />
                     </div>
-                    <Textarea
-                      id="les-inhoud"
-                      value={lesForm.inhoud}
-                      onChange={(e) => setLesForm({ ...lesForm, inhoud: e.target.value })}
-                      rows={10}
-                      placeholder="Les inhoud (Markdown ondersteun)..."
-                      className="border-0 focus-visible:ring-0 rounded-none resize-y"
-                    />
+                    {lesInhoudView === 'edit' ? (
+                      <Textarea
+                        id="les-inhoud"
+                        value={lesForm.inhoud}
+                        onChange={(e) => setLesForm({ ...lesForm, inhoud: e.target.value })}
+                        rows={10}
+                        placeholder="Les inhoud (Markdown ondersteun)..."
+                        className="border-0 focus-visible:ring-0 rounded-none resize-y"
+                      />
+                    ) : (
+                      <div className="min-h-[200px] max-h-[400px] overflow-y-auto p-4 bg-white text-left">
+                        {renderInhoudVoorskou(lesForm.inhoud)}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1936,34 +2111,12 @@ const LMSKursusBestuur: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="p-3 bg-blue-50 text-blue-800 text-sm rounded-lg border border-blue-200">
-                  <strong>Instruksies:</strong>
-                  <ul className="list-disc pl-4 mt-1 space-y-1">
-                    <li><strong>Opsie 1:</strong> Laai .mbz op na Google Drive, stel "Anyone with the link", plak skakel.</li>
-                    <li><strong>Opsie 2:</strong> Laai die .mbz lêer direk op (werk beter as Drive 404 gee).</li>
-                  </ul>
+                <div className="p-3 bg-amber-50 text-amber-900 text-sm rounded-lg border border-amber-200">
+                  <strong>Bron:</strong> Laai die .mbz lêer op. Invoer loop in die leser en skryf direk na die databasis (geen bedienerbelasting nie). Toetsvrae word outomaties herken.
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Google Drive Skakel</label>
-                  <Input
-                    value={driveLink}
-                    onChange={(e) => { setDriveLink(e.target.value); setImportFile(null); }}
-                    placeholder="https://drive.google.com/file/d/..."
-                  />
-                </div>
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-gray-200" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-2 text-gray-500">of</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Laai .mbz lêer direk op</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Laai .mbz lêer op</label>
                   <input
                     ref={importFileInputRef}
                     type="file"
@@ -1977,19 +2130,49 @@ const LMSKursusBestuur: React.FC = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full border-dashed"
+                    className="w-full border-dashed border-[#D4A84B]"
                     onClick={() => importFileInputRef.current?.click()}
                   >
                     {importFile ? importFile.name : 'Kies lêer (.mbz, .imscc, .zip)'}
                   </Button>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Voer in as</label>
+                  <select
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={importTargetKursusId}
+                    onChange={(e) => setImportTargetKursusId(e.target.value)}
+                  >
+                    <option value="">Nuwe kursus (skep uit MBZ)</option>
+                    {kursusse.map((k) => (
+                      <option key={k.id} value={String(k.id)}>{k.titel}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {importTargetKursusId && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Byvoeg by module</label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={importModuleId}
+                      onChange={(e) => setImportModuleId(e.target.value)}
+                    >
+                      <option value="">Nuwe module (skep en voeg lesse by)</option>
+                      {importModulesList.map((m) => (
+                        <option key={m.id} value={String(m.id)}>{m.titel}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="flex gap-3 mt-4">
                   <Button variant="outline" className="flex-1" onClick={() => { setShowImportModal(false); setImportFile(null); }}>Kanselleer</Button>
                   <Button
                     className="flex-1 bg-[#D4A84B] text-[#002855]"
                     onClick={handleImportMoodle}
-                    disabled={importing || (!driveLink && !importFile)}
+                    disabled={importing || !importFile}
                   >
                     {importing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
                     Voer in

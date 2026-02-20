@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GEMINI_EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent";
+const GEMINI_EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 const GEMINI_CHAT_URL = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 async function getGeminiEmbedding(apiKey: string, text: string): Promise<number[]> {
@@ -16,6 +16,7 @@ async function getGeminiEmbedding(apiKey: string, text: string): Promise<number[
     body: JSON.stringify({
       content: { parts: [{ text: text.substring(0, 3000) }] },
       taskType: "RETRIEVAL_DOCUMENT",
+      outputDimensionality: 768,
     }),
   });
   const data = await res.json();
@@ -128,6 +129,7 @@ serve(async (req) => {
       const vraag = data.vraag || data.question || "";
       const gebruikerId = data.gebruiker_id || null;
       const gemeenteId = data.gemeente_id || null;
+      const filterYear = data.filter_year != null ? Number(data.filter_year) : null;
 
       if (!vraag.trim()) throw new Error("Vraag vereis");
 
@@ -135,22 +137,26 @@ serve(async (req) => {
 
       let similarChunks: any[] | null = null;
       let searchError: any = null;
-      const { data: hybridResults, error: hybridErr } = await supabase.rpc("omsendbrief_hybrid_search", {
+      const hybridParams: Record<string, unknown> = {
         p_query_text: vraag,
         p_query_embedding: vraagEmbedding,
         p_limit: 10,
         p_vector_weight: 0.5,
         p_fts_weight: 0.5,
-      });
+      };
+      if (filterYear != null && !Number.isNaN(filterYear)) hybridParams.p_filter_year = filterYear;
+      const { data: hybridResults, error: hybridErr } = await supabase.rpc("omsendbrief_hybrid_search", hybridParams);
       if (!hybridErr && hybridResults?.length) {
         similarChunks = hybridResults;
       } else {
         if (hybridErr) searchError = hybridErr;
-        const { data: fallback } = await supabase.rpc("match_omsendbrief_chunks", {
+        const matchParams: Record<string, unknown> = {
           query_embedding: vraagEmbedding,
           match_count: 10,
           match_threshold: 0.4,
-        });
+        };
+        if (filterYear != null && !Number.isNaN(filterYear)) matchParams.p_filter_year = filterYear;
+        const { data: fallback } = await supabase.rpc("match_omsendbrief_chunks", matchParams);
         similarChunks = fallback?.length ? fallback : hybridResults || null;
         if (fallback?.length) searchError = hybridErr || true;
       }
@@ -160,6 +166,7 @@ serve(async (req) => {
       const bronne: { id: string; content: string; dokument?: string; original_file_url?: string; filename?: string }[] = [];
 
       if (similarChunks?.length) {
+        const chunkId = (c: any) => c.chunk_id ?? c.id;
         if (searchError) {
           const dokumentIds = [...new Set(similarChunks.map((c: any) => c.dokument_id).filter(Boolean))];
           const { data: docs } = await supabase
@@ -168,10 +175,10 @@ serve(async (req) => {
             .in("id", dokumentIds);
           const docMap = new Map((docs || []).map((d: any) => [d.id, d]));
           similarChunks.forEach((c: any) => {
-            bronChunkIds.push(c.id);
+            bronChunkIds.push(chunkId(c));
             const doc = docMap.get(c.dokument_id);
             bronne.push({
-              id: c.id,
+              id: chunkId(c),
               content: (c.content || "").substring(0, 200) + "...",
               dokument: doc?.metadata?.title || doc?.filename || undefined,
               original_file_url: doc?.original_file_url || undefined,
@@ -180,9 +187,9 @@ serve(async (req) => {
           });
         } else {
           similarChunks.forEach((c: any) => {
-            bronChunkIds.push(c.id);
+            bronChunkIds.push(chunkId(c));
             bronne.push({
-              id: c.id,
+              id: chunkId(c),
               content: (c.content || "").substring(0, 200) + "...",
               dokument: c.document_title || undefined,
               original_file_url: c.original_file_url || undefined,

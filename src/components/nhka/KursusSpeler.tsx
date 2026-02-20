@@ -25,7 +25,9 @@ import {
 
   GraduationCap,
   Download,
-  File as FileIcon
+  File as FileIcon,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -58,7 +60,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
   onLesChange,
   onVorderingUpdate
 }) => {
-  const { currentUser, language } = useNHKA();
+  const { currentUser, language, lmsFullScreen, setLmsFullScreen } = useNHKA();
   const { toast } = useToast();
   const t = lmsTranslations[language as 'af' | 'en'];
 
@@ -83,6 +85,26 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
     const lesVordering = vordering.find(v => v.les_id === les.id);
     return lesVordering?.video_posisie || 0;
   };
+
+  // Reset full screen when leaving kursus speler
+  useEffect(() => {
+    return () => setLmsFullScreen(false);
+  }, [setLmsFullScreen]);
+
+  // Scroll to top when lesson changes so new page shows from top (main is the scroll container)
+  useEffect(() => {
+    const scrollToTop = () => {
+      const main = document.querySelector('main');
+      if (main) main.scrollTo({ top: 0, behavior: 'auto' });
+      else window.scrollTo({ top: 0, behavior: 'auto' });
+    };
+    scrollToTop();
+    // Also scroll after layout (in case content renders late)
+    const raf = requestAnimationFrame(() => {
+      scrollToTop();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [les.id]);
 
   useEffect(() => {
     // Reset state when lesson changes
@@ -214,7 +236,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
     }
   };
 
-  // Generate certificate when course is completed
+  // Generate certificate when course is completed and trigger download
   const generateCertificate = async () => {
     if (!currentUser) return;
 
@@ -223,17 +245,34 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
         body: {
           gebruiker_id: currentUser.id,
           kursus_id: kursus.id,
-          gebruiker_naam: `${currentUser.naam} ${currentUser.van}`,
+          gebruiker_naam: `${currentUser.naam || ''} ${currentUser.van || ''}`.trim() || 'Leerder',
           kursus_titel: kursus.titel
         }
       });
 
       if (error) {
         console.error('Error generating certificate:', error);
+        toast({ title: 'Fout', description: 'Kon nie sertifikaat skep nie.', variant: 'destructive' });
         return;
       }
 
-      if (data?.success) {
+      if (data?.success && data?.pdf_url) {
+        // Trigger immediate download
+        if (data.pdf_url.startsWith('data:image/svg+xml')) {
+          const base64 = data.pdf_url.split(',')[1];
+          const svgContent = decodeURIComponent(escape(atob(base64)));
+          const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `Sertifikaat_${data.sertifikaat_nommer || 'NHKA'}.svg`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } else {
+          window.open(data.pdf_url, '_blank');
+        }
         toast({
           title: t.certificateGenerated,
           description: t.certificateMessage,
@@ -241,6 +280,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
       }
     } catch (error) {
       console.error('Error generating certificate:', error);
+      toast({ title: 'Fout', description: 'Kon nie sertifikaat skep nie.', variant: 'destructive' });
     }
   };
 
@@ -286,7 +326,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
             .update({
               status: 'voltooi',
               toets_geslaag: true,
-              voltooi_datum: new Date().toISOString()
+              completed_at: new Date().toISOString()
             })
             .eq('id', existing.id);
         } else {
@@ -298,7 +338,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
               les_id: les.id,
               status: 'voltooi',
               toets_geslaag: true,
-              voltooi_datum: new Date().toISOString()
+              completed_at: new Date().toISOString()
             });
         }
 
@@ -334,7 +374,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
           .from('lms_vordering')
           .update({
             status: 'voltooi',
-            voltooi_datum: new Date().toISOString()
+            completed_at: new Date().toISOString()
           })
           .eq('id', existing.id);
       } else {
@@ -345,7 +385,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
             kursus_id: kursus.id,
             les_id: les.id,
             status: 'voltooi',
-            voltooi_datum: new Date().toISOString()
+            completed_at: new Date().toISOString()
           });
       }
 
@@ -380,7 +420,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
           .from('lms_vordering')
           .update({
             status: 'voltooi',
-            voltooi_datum: new Date().toISOString()
+            completed_at: new Date().toISOString()
           })
           .eq('id', existing.id);
       } else {
@@ -391,7 +431,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
             kursus_id: kursus.id,
             les_id: les.id,
             status: 'voltooi',
-            voltooi_datum: new Date().toISOString()
+            completed_at: new Date().toISOString()
           });
       }
 
@@ -428,7 +468,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
           .from('lms_vordering')
           .update({
             status: 'voltooi',
-            voltooi_datum: new Date().toISOString()
+            completed_at: new Date().toISOString()
           })
           .eq('id', existing.id);
         error = updError;
@@ -440,7 +480,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
             kursus_id: kursus.id,
             les_id: les.id,
             status: 'voltooi',
-            voltooi_datum: new Date().toISOString()
+            completed_at: new Date().toISOString()
           });
         error = insError;
       }
@@ -573,24 +613,37 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={onBack}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {t.backToCourse}
-        </Button>
-        <div className="flex items-center gap-3">
-          {kursus.is_vbo_geskik && isPredikant && (
-            <Badge className="bg-[#D4A84B] text-[#002855]">
-              <GraduationCap className="w-3 h-3 mr-1" />
-              VBO {kursus.vbo_krediete} krediete
-            </Badge>
-          )}
-          <div className="text-sm text-gray-500">
-            {t.lesson} {currentIndex + 1} {t.of} {allLesse.length}
+      {/* Header - hidden in full screen except exit button */}
+      {lmsFullScreen ? (
+        <div className="flex justify-end px-4 py-2 bg-white/80 backdrop-blur-sm rounded-b-lg shadow-sm sticky top-0 z-10">
+          <Button variant="outline" size="sm" onClick={() => setLmsFullScreen(false)}>
+            <Minimize2 className="w-4 h-4 mr-2" />
+            {t.exitFullScreen}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" onClick={onBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {t.backToCourse}
+          </Button>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setLmsFullScreen(true)} title={t.fullScreen}>
+              <Maximize2 className="w-4 h-4 mr-2" />
+              {t.fullScreen}
+            </Button>
+            {kursus.is_vbo_geskik && isPredikant && (
+              <Badge className="bg-[#D4A84B] text-[#002855]">
+                <GraduationCap className="w-3 h-3 mr-1" />
+                VBO {kursus.vbo_krediete} krediete
+              </Badge>
+            )}
+            <div className="text-sm text-gray-500">
+              {t.lesson} {currentIndex + 1} {t.of} {allLesse.length}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* VBO Success Banner */}
       {showVBOSuccess && (
@@ -617,9 +670,9 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
         </div>
       )}
 
-      <div className="grid lg:grid-cols-4 gap-6">
+      <div className={`grid gap-6 ${lmsFullScreen ? '' : 'lg:grid-cols-4'}`}>
         {/* Main Content */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className={lmsFullScreen ? 'space-y-6' : 'lg:col-span-3 space-y-6'}>
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
@@ -736,6 +789,12 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
               {/* Assignment Content */}
               {isAssignment && (
                 <div className="space-y-6">
+                  {/* Assignment instructions (les.inhoud) - same as teks lessons */}
+                  {les.inhoud && (
+                    <div className="mb-6">
+                      {renderContent(les.inhoud)}
+                    </div>
+                  )}
                   <OpdragIndiener
                     les={les}
                     kursus={kursus}
@@ -769,13 +828,22 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
                   ) : (
                     <Button
                       onClick={() => {
-                        if (!isLesVoltooi(les.id)) {
-                          handleCompleteLes();
+                        if (!hasNext) {
+                          // Last lesson: complete if needed, then go back (like Terug)
+                          if (!isLesVoltooi(les.id)) {
+                            handleCompleteLes();
+                          } else {
+                            onBack();
+                          }
                         } else {
-                          goToNextLes();
+                          if (!isLesVoltooi(les.id)) {
+                            handleCompleteLes();
+                          } else {
+                            goToNextLes();
+                          }
                         }
                       }}
-                      disabled={completing || (!hasNext && !isLesVoltooi(les.id))}
+                      disabled={completing}
                       className="bg-[#D4A84B] hover:bg-[#C49A3B] text-[#002855] font-semibold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {completing ? (
@@ -822,8 +890,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
                   </Button>
 
                   <Button
-                    variant="outline"
-                    className="text-white border-white hover:bg-white/10"
+                    className="bg-white text-[#002855] hover:bg-gray-100 border-0 font-semibold"
                     onClick={onBack}
                   >
                     Terug na Kursusse
@@ -835,7 +902,8 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
 
         </div>
 
-        {/* Sidebar - Course Navigation */}
+        {/* Sidebar - Course Navigation (hidden in full screen) */}
+        {!lmsFullScreen && (
         <div className="space-y-4">
           {/* VBO Info Card */}
           {kursus.is_vbo_geskik && isPredikant && (
@@ -946,6 +1014,7 @@ const KursusSpeler: React.FC<KursusSpelerProps> = ({
             </Card>
           )}
         </div>
+        )}
       </div >
     </div >
   );

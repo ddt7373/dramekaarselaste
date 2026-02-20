@@ -9,7 +9,8 @@ import {
   getVBOAktiwiteitTipeLabel,
   getVBOIndieningStatusLabel,
   isModerator,
-  Gebruiker
+  Gebruiker,
+  VBOHistoriesePunte
 } from '@/types/nhka';
 import {
   Award,
@@ -41,7 +42,9 @@ import {
   UserCheck,
   Video,
   Book,
-  Sparkles
+  Sparkles,
+  History,
+  Trophy
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -50,6 +53,13 @@ const ACTIVITY_IDS = {
   INTERNASIONALE_KONFERENSIE: 'b7eebc99-9c0b-4ef8-bb6d-6bb9bd380a18',
   LMS_KURSUS: 'b3eebc99-9c0b-4ef8-bb6d-6bb9bd380a24'
 };
+
+interface LeaderboardEntry {
+  predikant_id: string;
+  naam: string;
+  van: string;
+  totale_punte: number;
+}
 
 // VBO Activities as per NHKA requirements
 const NHKA_VBO_AKTIWITEITE: VBOAktiwiteit[] = [
@@ -240,6 +250,8 @@ const VBO: React.FC = () => {
   const [aktiwiteite, setAktiwiteite] = useState<VBOAktiwiteit[]>([]);
   const [myIndienings, setMyIndienings] = useState<VBOIndiening[]>([]);
   const [alleIndienings, setAlleIndienings] = useState<VBOIndiening[]>([]);
+  const [historicalPoints, setHistoricalPoints] = useState<VBOHistoriesePunte[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Modal states
@@ -381,6 +393,15 @@ const VBO: React.FC = () => {
           setMyIndienings(converted);
         }
 
+        // Fetch historical points for predikant
+        const { data: histData } = await supabase
+          .from('vbo_historiese_punte')
+          .select('*')
+          .eq('predikant_id', currentUser.id)
+          .order('jaar', { ascending: false });
+
+        setHistoricalPoints(histData || []);
+
         // For moderators and hoof_admin, fetch all submissions
         if (showManagementView) {
           const { data: allData, error: allError } = await supabase
@@ -442,6 +463,45 @@ const VBO: React.FC = () => {
         }
       } catch (error) {
         console.error('Error loading VBO data:', error);
+      }
+
+      // Fetch data for leaderboard (excluding historical points as requested)
+      try {
+        const { data: allApprovedIndienings } = await supabase
+          .from('vbo_indienings')
+          .select('predikant_id, krediete, status')
+          .eq('status', 'goedgekeur');
+
+        // Calculate leaderboard
+        if (allApprovedIndienings) {
+          const scores = new Map<string, number>();
+
+          // Process current system submissions (approved only)
+          allApprovedIndienings.forEach(ind => {
+            if (ind.predikant_id) {
+              const current = scores.get(ind.predikant_id) || 0;
+              scores.set(ind.predikant_id, current + (ind.krediete || 0));
+            }
+          });
+
+          // Historical points are excluded from leaderboard as per request
+
+          const lb: LeaderboardEntry[] = [];
+
+          scores.forEach((score, id) => {
+            lb.push({
+              predikant_id: id,
+              naam: 'Anoniem', // Default
+              van: '',
+              totale_punte: score
+            });
+          });
+
+          lb.sort((a, b) => b.totale_punte - a.totale_punte);
+          setLeaderboard(lb);
+        }
+      } catch (err) {
+        console.error("Error fetching leaderboard data", err);
       }
     }
 
@@ -795,6 +855,7 @@ const VBO: React.FC = () => {
           <div className="space-y-4">
             {/* Stats Overview */}
             {/* Stats Overview - Blue & Gold Banner */}
+            {/* Stats Overview - Blue & Gold Banner */}
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#002855] to-[#003d7a] p-6 md:p-8 text-white shadow-lg">
               {/* Decorative Elements */}
               <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4A84B]/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -832,79 +893,162 @@ const VBO: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Right Section: Secondary Stats */}
-                <div className="flex flex-col gap-4 md:items-end">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10 min-w-[200px]">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Clock className="w-5 h-5 text-[#D4A84B]" />
-                      <span className="text-sm font-medium text-white/90">Hangende Indienings</span>
+                {/* Right Section: Secondary Stats & Leaderboard Mini */}
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 shadow-lg hover:bg-white/15 transition-colors">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Clock className="w-5 h-5 text-[#D4A84B]" />
+                        <span className="text-sm font-bold text-white/90">Hangende</span>
+                      </div>
+                      <p className="text-2xl font-bold">{hangendeIndienings}</p>
                     </div>
-                    <p className="text-2xl font-bold">{hangendeIndienings}</p>
+
+                    {/* My Position Box */}
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 shadow-lg hover:bg-white/15 transition-colors cursor-pointer" onClick={() => document.getElementById('leaderboard-section')?.scrollIntoView({ behavior: 'smooth' })}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <Trophy className="w-5 h-5 text-[#D4A84B]" />
+                        <span className="text-sm font-bold text-white/90">Ranglys</span>
+                      </div>
+                      <p className="text-2xl font-bold">
+                        #{leaderboard.findIndex(l => l.predikant_id === currentUser?.id) + 1 || '-'}
+                      </p>
+                      <p className="text-xs text-white/60">van {leaderboard.length} predikante</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            <h3 className="font-semibold text-[#002855]">My Indienings ({selectedYear})</h3>
 
-            {myIndienings.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 border border-gray-100 text-center">
-                <Award className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">Jy het nog geen indienings nie</p>
-                <p className="text-sm text-gray-400 mt-1">Klik op "Aktiwiteite" om beskikbare aktiwiteite te sien</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {myIndienings.map(indiening => (
-                  <div key={indiening.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          {getTipeBadge(indiening.aktiwiteit?.tipe || 'ander')}
-                          {getStatusBadge(indiening.status)}
-                          {indiening.aktiwiteit_id === ACTIVITY_IDS.LMS_KURSUS && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-medium rounded-full">
-                              <Sparkles className="w-3 h-3" />
-                              Outomaties
-                            </span>
+            {/* Leaderboard Section */}
+            {leaderboard.length > 0 && (
+              <div id="leaderboard-section" className="bg-white rounded-xl p-6 border border-gray-200 shadow-md">
+                <h3 className="font-bold text-[#002855] text-lg mb-4 flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-[#D4A84B]" />
+                  Predikant Ranglys (Top 10)
+                </h3>
+                <div className="overflow-x-auto">
+                  <div className="flex gap-2 pb-2">
+                    {leaderboard.slice(0, 10).map((entry, idx) => {
+                      const isMe = entry.predikant_id === currentUser?.id;
+                      return (
+                        <div key={idx} className={`flex-shrink-0 w-28 p-4 rounded-xl border-2 transition-transform hover:scale-105 ${isMe ? 'bg-[#002855] border-[#002855] text-white shadow-xl scale-105 ring-4 ring-[#D4A84B]/20' : 'bg-white border-gray-100 text-gray-600 shadow-sm'} flex flex-col items-center text-center relative overflow-hidden`}>
+                          {idx < 3 && (
+                            <div className="absolute top-0 right-0 p-1">
+                              <Sparkles className={`w-3 h-3 ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : 'text-amber-600'}`} />
+                            </div>
                           )}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm mb-2 shadow-inner ${isMe ? 'bg-[#D4A84B] text-[#002855]' : idx === 0 ? 'bg-yellow-100 text-yellow-700' : idx === 1 ? 'bg-gray-100 text-gray-700' : idx === 2 ? 'bg-amber-100 text-amber-700' : 'bg-gray-50 text-gray-400'}`}>
+                            {idx + 1}
+                          </div>
+                          <span className="text-xs font-bold uppercase tracking-wide opacity-80 mb-1">
+                            {isMe ? 'Jy' : 'Predikant'}
+                          </span>
+                          <span className={`text-lg font-black ${isMe ? 'text-[#D4A84B]' : 'text-[#002855]'}`}>
+                            {entry.totale_punte}
+                          </span>
+                          <span className="text-[10px] opacity-60">kri</span>
                         </div>
-                        <h4 className="font-semibold text-[#002855]">{indiening.aktiwiteit?.titel}</h4>
-                        {indiening.notas && (
-                          <p className="text-sm text-gray-600 mt-1">{indiening.notas}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-2">
-                          Ingedien: {new Date(indiening.created_at).toLocaleDateString('af-ZA')}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-[#D4A84B]">
-                          {indiening.aktiwiteit?.krediete || '?'}
-                        </p>
-                        <p className="text-xs text-gray-500">krediete</p>
-                      </div>
-                    </div>
-
-                    {indiening.bewys_naam && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <FileText className="w-4 h-4" />
-                          <span>{indiening.bewys_naam}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {indiening.moderator_notas && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Moderator Notas:</span> {indiening.moderator_notas}
-                        </p>
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
-                ))}
+                </div>
               </div>
             )}
-          </div>
+
+            {/* Historical Data Section */}
+            {historicalPoints.length > 0 && (
+              <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm mt-6">
+                <h3 className="font-bold text-[#002855] text-lg mb-4 flex items-center gap-2">
+                  <History className="w-5 h-5 text-[#D4A84B]" />
+                  Historiese Data
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-500">Jaar</th>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-500">Beskrywing</th>
+                        <th className="text-right px-4 py-3 font-semibold text-gray-500">Punte</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {historicalPoints.map((point) => (
+                        <tr key={point.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{point.jaar}</td>
+                          <td className="px-4 py-3 text-gray-600">{point.beskrywing || 'Historiese data invoer'}</td>
+                          <td className="px-4 py-3 text-right font-bold text-[#D4A84B]">{point.punte}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <h3 className="font-semibold text-[#002855] mt-6">My Indienings ({selectedYear})</h3>
+
+            {
+              myIndienings.length === 0 ? (
+                <div className="bg-white rounded-xl p-8 border border-gray-100 text-center">
+                  <Award className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">Jy het nog geen indienings nie</p>
+                  <p className="text-sm text-gray-400 mt-1">Klik op "Aktiwiteite" om beskikbare aktiwiteite te sien</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {myIndienings.map(indiening => (
+                    <div key={indiening.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {getTipeBadge(indiening.aktiwiteit?.tipe || 'ander')}
+                            {getStatusBadge(indiening.status)}
+                            {indiening.aktiwiteit_id === ACTIVITY_IDS.LMS_KURSUS && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#D4A84B]/10 text-[#D4A84B] text-xs font-medium rounded-full">
+                                <Sparkles className="w-3 h-3" />
+                                Outomaties
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-semibold text-[#002855]">{indiening.aktiwiteit?.titel}</h4>
+                          {indiening.notas && (
+                            <p className="text-sm text-gray-600 mt-1">{indiening.notas}</p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            Ingedien: {new Date(indiening.created_at).toLocaleDateString('af-ZA')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-[#D4A84B]">
+                            {indiening.aktiwiteit?.krediete || '?'}
+                          </p>
+                          <p className="text-xs text-gray-500">krediete</p>
+                        </div>
+                      </div>
+
+                      {indiening.bewys_naam && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <FileText className="w-4 h-4" />
+                            <span>{indiening.bewys_naam}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {indiening.moderator_notas && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-sm text-gray-600">
+                            <span className="font-medium">Moderator Notas:</span> {indiening.moderator_notas}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          </div >
         )
       }
 
@@ -1341,95 +1485,97 @@ const VBO: React.FC = () => {
       }
 
       {/* Edit Aktiwiteit Modal */}
-      {showEditAktiwiteit && editingAktiwiteit && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-[#002855]">Wysig VBO Aktiwiteit</h2>
-              <button onClick={() => { setShowEditAktiwiteit(false); setEditingAktiwiteit(null); }} className="p-2 rounded-lg hover:bg-gray-100">
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Titel *</label>
-                <input
-                  type="text"
-                  value={editingAktiwiteit.titel}
-                  onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, titel: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] focus:ring-2 focus:ring-[#D4A84B]/20 outline-none"
-                />
+      {
+        showEditAktiwiteit && editingAktiwiteit && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
+              <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <h2 className="text-lg font-bold text-[#002855]">Wysig VBO Aktiwiteit</h2>
+                <button onClick={() => { setShowEditAktiwiteit(false); setEditingAktiwiteit(null); }} className="p-2 rounded-lg hover:bg-gray-100">
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Beskrywing *</label>
-                <textarea
-                  value={editingAktiwiteit.beskrywing}
-                  onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, beskrywing: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] focus:ring-2 focus:ring-[#D4A84B]/20 outline-none resize-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
-                  <select
-                    value={editingAktiwiteit.tipe}
-                    onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, tipe: e.target.value as VBOAktiwiteitTipe })}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] outline-none bg-white"
-                  >
-                    <option value="kursus">LMS Kursus</option>
-                    <option value="konferensie">Konferensie</option>
-                    <option value="werkwinkel">Werkwinkel</option>
-                    <option value="mentorskap">Mentorskap</option>
-                    <option value="navorsing">Navorsing</option>
-                    <option value="publikasie">Publikasie</option>
-                    <option value="ander">Ander</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Titel *</label>
+                  <input
+                    type="text"
+                    value={editingAktiwiteit.titel}
+                    onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, titel: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] focus:ring-2 focus:ring-[#D4A84B]/20 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Krediete</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="50"
-                    value={editingAktiwiteit.krediete}
-                    onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, krediete: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] outline-none"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Beskrywing *</label>
+                  <textarea
+                    value={editingAktiwiteit.beskrywing}
+                    onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, beskrywing: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] focus:ring-2 focus:ring-[#D4A84B]/20 outline-none resize-none"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
+                    <select
+                      value={editingAktiwiteit.tipe}
+                      onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, tipe: e.target.value as VBOAktiwiteitTipe })}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] outline-none bg-white"
+                    >
+                      <option value="kursus">LMS Kursus</option>
+                      <option value="konferensie">Konferensie</option>
+                      <option value="werkwinkel">Werkwinkel</option>
+                      <option value="mentorskap">Mentorskap</option>
+                      <option value="navorsing">Navorsing</option>
+                      <option value="publikasie">Publikasie</option>
+                      <option value="ander">Ander</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Krediete</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={editingAktiwiteit.krediete}
+                      onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, krediete: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-[#D4A84B] outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingAktiwiteit.bewyse_verplig}
+                      onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, bewyse_verplig: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-300 text-[#D4A84B]"
+                    />
+                    <span className="text-sm text-gray-700">Bewys verpligtend</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingAktiwiteit.aktief}
+                      onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, aktief: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-300 text-[#D4A84B]"
+                    />
+                    <span className="text-sm text-gray-700">Aktief</span>
+                  </label>
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editingAktiwiteit.bewyse_verplig}
-                    onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, bewyse_verplig: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300 text-[#D4A84B]"
-                  />
-                  <span className="text-sm text-gray-700">Bewys verpligtend</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editingAktiwiteit.aktief}
-                    onChange={(e) => setEditingAktiwiteit({ ...editingAktiwiteit, aktief: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300 text-[#D4A84B]"
-                  />
-                  <span className="text-sm text-gray-700">Aktief</span>
-                </label>
+              <div className="flex gap-3 p-4 border-t border-gray-100">
+                <button onClick={() => { setShowEditAktiwiteit(false); setEditingAktiwiteit(null); }} className="flex-1 py-2 px-4 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50">
+                  Kanselleer
+                </button>
+                <button onClick={handleUpdateAktiwiteit} disabled={saving} className="flex-1 py-2 px-4 rounded-xl bg-[#D4A84B] text-[#002855] font-semibold hover:bg-[#c49a3d] disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Stoor</>}
+                </button>
               </div>
-            </div>
-            <div className="flex gap-3 p-4 border-t border-gray-100">
-              <button onClick={() => { setShowEditAktiwiteit(false); setEditingAktiwiteit(null); }} className="flex-1 py-2 px-4 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50">
-                Kanselleer
-              </button>
-              <button onClick={handleUpdateAktiwiteit} disabled={saving} className="flex-1 py-2 px-4 rounded-xl bg-[#D4A84B] text-[#002855] font-semibold hover:bg-[#c49a3d] disabled:opacity-50 flex items-center justify-center gap-2">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Stoor</>}
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Submit Indiening Modal */}
       {
@@ -1698,7 +1844,7 @@ const VBO: React.FC = () => {
           </div>
         )
       }
-    </div>
+    </div >
   );
 };
 

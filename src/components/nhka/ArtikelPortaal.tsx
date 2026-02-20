@@ -9,8 +9,36 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Send, AlertCircle, CheckCircle2, Info, ArrowLeft, Loader2, ListChecks, History } from 'lucide-react';
+import { FileText, Send, AlertCircle, CheckCircle2, Info, ArrowLeft, Loader2, ListChecks, History, Eye } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+/** Maksimum karakters vir artikel-inhoud om netwerk/timeout-foute te vermy (Supabase/PostgREST limiete). */
+const MAX_INHOUD_KARAKTERS = 350_000;
+
+/** Maak teks met ** of __ vetdruk en (opcional) <strong>/<b> veilig vir vertoning. */
+function renderInhoudMetVetdruk(tekst: string): React.ReactNode[] {
+    if (!tekst) return [];
+    let safe = tekst
+        .replace(/<strong\b[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**')
+        .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
+    const parts: React.ReactNode[] = [];
+    const re = /\*\*([^*]*)\*\*|__([^_]*)__/g;
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+    while ((match = re.exec(safe)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(<React.Fragment key={`t-${key++}`}>{safe.slice(lastIndex, match.index)}</React.Fragment>);
+        }
+        const boldText = match[1] ?? match[2] ?? '';
+        parts.push(<strong key={`b-${key++}`}>{boldText}</strong>);
+        lastIndex = re.lastIndex;
+    }
+    if (lastIndex < safe.length) {
+        parts.push(<React.Fragment key={`t-${key++}`}>{safe.slice(lastIndex)}</React.Fragment>);
+    }
+    return parts;
+}
 
 const ArtikelPortaal: React.FC = () => {
     const { currentUser } = useNHKA();
@@ -24,6 +52,7 @@ const ArtikelPortaal: React.FC = () => {
     const [anderTipe, setAnderTipe] = useState('');
     const [myIndienings, setMyIndienings] = useState<ArtikelIndiening[]>([]);
     const [fetchingMyIndienings, setFetchingMyIndienings] = useState(false);
+    const [toonVoorskou, setToonVoorskou] = useState(false);
 
     useEffect(() => {
         fetchTipes();
@@ -69,6 +98,7 @@ const ArtikelPortaal: React.FC = () => {
 
     const wordCount = inhoud.trim() ? inhoud.trim().split(/\s+/).length : 0;
     const isOverLimit = selectedTipe?.maks_woorde ? wordCount > selectedTipe.maks_woorde : false;
+    const isOverCharLimit = inhoud.length > MAX_INHOUD_KARAKTERS;
 
     const handleIndien = async () => {
         if (!currentUser) return;
@@ -85,6 +115,14 @@ const ArtikelPortaal: React.FC = () => {
             toast({
                 title: 'Te veel woorde',
                 description: `Jou artikel is ${wordCount} woorde. Die maksimum vir hierdie tipe is ${selectedTipe?.maks_woorde}.`,
+                variant: 'destructive'
+            });
+            return;
+        }
+        if (isOverCharLimit) {
+            toast({
+                title: 'Teks te lank',
+                description: `Die artikel teks mag nie meer as ${(MAX_INHOUD_KARAKTERS / 1000).toFixed(0)} 000 karakters wees nie (tans ${(inhoud.length / 1000).toFixed(0)} 000). Verkort die teks of deel dit in meer as een artikel.`,
                 variant: 'destructive'
             });
             return;
@@ -114,9 +152,17 @@ const ArtikelPortaal: React.FC = () => {
             setSubmitted(true);
             fetchMyIndienings();
         } catch (error: any) {
+            const msg = error?.message || '';
+            const isNetworkError = typeof msg === 'string' && (
+                msg.includes('fetch') ||
+                msg.includes('Network') ||
+                error?.name === 'TypeError'
+            );
             toast({
                 title: 'Fout',
-                description: error.message,
+                description: isNetworkError
+                    ? 'Netwerkfout: Kon nie met die bediener verbind nie. Kontroleer jou internetverbinding, probeer weer, of probeer met \'n korter artikel (veral as die teks baie lank is).'
+                    : msg,
                 variant: 'destructive'
             });
         } finally {
@@ -255,21 +301,47 @@ const ArtikelPortaal: React.FC = () => {
                                                 />
                                             </div>
 
-                                            <div className="relative">
-                                                <Label htmlFor="inhoud" className="text-gray-700">Teks</Label>
-                                                <Textarea
-                                                    id="inhoud"
-                                                    value={inhoud}
-                                                    onChange={(e) => setInhoud(e.target.value)}
-                                                    placeholder="Plak jou artikel hier..."
-                                                    className="min-h-[400px] font-serif p-6 text-lg border-gray-200 focus:border-[#002855] focus:ring-[#002855]"
-                                                />
-
-                                                <div className={`absolute bottom-4 right-4 px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-2 shadow-sm ${isOverLimit ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'
-                                                    }`}>
-                                                    {isOverLimit ? <AlertCircle className="w-3.5 h-3.5" /> : null}
-                                                    Woorde: {wordCount} {selectedTipe.maks_woorde ? `/ ${selectedTipe.maks_woorde}` : ''}
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <Label htmlFor="inhoud" className="text-gray-700">Teks</Label>
+                                                    <Button
+                                                        type="button"
+                                                        variant={toonVoorskou ? 'secondary' : 'ghost'}
+                                                        size="sm"
+                                                        onClick={() => setToonVoorskou(!toonVoorskou)}
+                                                        className="text-xs gap-1.5"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                        {toonVoorskou ? 'Voorskou (vetdruk wys)' : 'Wys voorskou'}
+                                                    </Button>
                                                 </div>
+                                                {!toonVoorskou ? (
+                                                    <div className="relative">
+                                                        <Textarea
+                                                            id="inhoud"
+                                                            value={inhoud}
+                                                            onChange={(e) => setInhoud(e.target.value)}
+                                                            placeholder="Plak jou artikel hier... Gebruik **tekst** of __tekst__ vir vetdruk; dit sal in die voorskou so wys."
+                                                            className="min-h-[400px] font-serif p-6 text-lg border-gray-200 focus:border-[#002855] focus:ring-[#002855]"
+                                                            maxLength={MAX_INHOUD_KARAKTERS + 5000}
+                                                        />
+                                                        <div className="absolute bottom-4 right-4 flex flex-col items-end gap-1">
+                                                            <div className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-2 shadow-sm ${isOverLimit || isOverCharLimit ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                                {isOverLimit || isOverCharLimit ? <AlertCircle className="w-3.5 h-3.5" /> : null}
+                                                                Woorde: {wordCount} {selectedTipe.maks_woorde ? `/ ${selectedTipe.maks_woorde}` : ''}
+                                                            </div>
+                                                            {inhoud.length > 200_000 && (
+                                                                <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                                                    {inhoud.length.toLocaleString()} karakters (maks {(MAX_INHOUD_KARAKTERS / 1000).toFixed(0)}k)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="min-h-[400px] font-serif p-6 text-lg border border-gray-200 rounded-md bg-gray-50 text-gray-800 leading-relaxed whitespace-pre-wrap">
+                                                        {inhoud.trim() ? renderInhoudMetVetdruk(inhoud) : <span className="text-gray-400">Geen teks om te wys nie. Tik of plak in die Teks-blad.</span>}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {isOverLimit && (
@@ -290,7 +362,7 @@ const ArtikelPortaal: React.FC = () => {
                                 </p>
                                 <Button
                                     onClick={handleIndien}
-                                    disabled={loading || isOverLimit || !titel.trim() || !inhoud.trim()}
+                                    disabled={loading || isOverLimit || isOverCharLimit || !titel.trim() || !inhoud.trim()}
                                     className="bg-[#002855] hover:bg-[#003d7a] text-white px-8 py-6 rounded-xl shadow-lg transition-transform active:scale-95"
                                 >
                                     {loading ? (

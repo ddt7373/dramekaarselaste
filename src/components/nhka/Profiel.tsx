@@ -995,7 +995,7 @@ const Profiel: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-medium text-[#002855]">{selectedVerwanteUser.naam} {selectedVerwanteUser.van}</p>
-                          <p className="text-xs text-gray-500">{(selectedVerwanteUser as any).gemeente?.naam || 'Onbekend'}</p>
+                          <p className="text-xs text-gray-500">{(selectedVerwanteUser as any).gemeente_data?.naam || 'Onbekend'}</p>
                         </div>
                       </div>
                       <button
@@ -1038,7 +1038,7 @@ const Profiel: React.FC = () => {
                               className="w-full text-left px-4 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0"
                             >
                               <p className="font-medium text-[#002855]">{user.naam} {user.van}</p>
-                              <p className="text-xs text-gray-500">{(user as any).gemeente?.naam || 'Onbekend'}</p>
+                              <p className="text-xs text-gray-500">{(user as any).gemeente_data?.naam || 'Onbekend'}</p>
                             </button>
                           ))}
                         </div>

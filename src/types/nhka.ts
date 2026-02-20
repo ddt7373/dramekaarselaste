@@ -16,6 +16,7 @@ export interface Gemeente {
   is_demo: boolean;
   created_at: string;
   updated_at: string;
+  sluit_uit_van_statistiek?: boolean;
 }
 
 // Gemeente Bank Besonderhede (Bank Details)
@@ -154,6 +155,7 @@ export interface Gebruiker {
   portefeulje_1?: string;
   portefeulje_2?: string;
   portefeulje_3?: string;
+  is_oorlede?: boolean;
 }
 
 export interface Wyk {
@@ -507,6 +509,18 @@ export interface VBOKredietOpsomming {
   hangende_indienings: number;
 }
 
+export interface VBOHistoriesePunte {
+  id: string;
+  predikant_id?: string | null;
+  csv_naam?: string;
+  csv_van?: string;
+  jaar: number;
+  punte: number;
+  beskrywing?: string;
+  created_at: string;
+  predikant?: Gebruiker;
+}
+
 export const getVBOAktiwiteitTipeLabel = (tipe: VBOAktiwiteitTipe): string => {
   const labels: Record<VBOAktiwiteitTipe, string> = {
     kursus: 'LMS Kursus',
@@ -705,7 +719,10 @@ export type AppView =
   | 'bybelkennis'
   | 'artikel-portaal'
   | 'redaksie-portaal'
-  | 'omsendbrief-kletsbot';
+  | 'krisis-bestuur'
+  | 'omsendbrief-kletsbot'
+  | 'musiek'
+  | 'musiek-admin';
 
 
 
@@ -1013,6 +1030,8 @@ export interface KuberkermisProdukt {
   voorraad: number; // -1 means unlimited
   aktief: boolean;
   is_kaartjie: boolean;
+  /** When set, this product is an LMS course voucher; purchase generates codes for this course */
+  lms_kursus_id?: string | null;
   geskep_deur?: string;
   created_at: string;
   updated_at: string;
@@ -1342,7 +1361,7 @@ export interface LMSRegistrasie {
   betaling_status: 'gratis' | 'hangende' | 'betaal';
   betaling_bedrag: number;
   begin_datum: string;
-  voltooi_datum?: string;
+  completed_at?: string;
   kursus?: LMSKursus;
 }
 

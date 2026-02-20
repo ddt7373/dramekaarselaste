@@ -266,7 +266,7 @@ const StatisticsManagement: React.FC<StatisticsManagementProps> = ({ congregatio
                             </div>
                             <div>
                                 <p className="text-3xl font-bold text-amber-600">{realTimeStats.oorlede}</p>
-                                <p className="text-xs text-gray-500">Sterftes Angemeld</p>
+                                <p className="text-xs text-gray-500">Sterftes Aangemeld</p>
                             </div>
                         </div>
                     </CardContent>

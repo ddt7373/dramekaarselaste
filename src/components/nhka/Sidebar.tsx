@@ -42,7 +42,9 @@ import {
   BookOpenCheck,
   Zap,
   ClipboardList,
-  ChevronDown
+  ChevronDown,
+  Shield,
+  Music
 } from 'lucide-react';
 
 
@@ -76,7 +78,7 @@ const navItems: NavItem[] = [
     roles: ['leier', 'admin', 'hoof_admin']
   },
   { id: 'gemeente-kaart', label: 'Gemeente Kaart', icon: <Map className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'denominasie-kaart', label: 'NHKA Kaart', icon: <Globe className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'denominasie-kaart', label: 'Alle gemeentes', icon: <Globe className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
   { id: 'konsistorieboek', label: 'Konsistorieboek', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier', 'lidmaat'] },
   { id: 'wyk-toewysing', label: 'Wyk Toewysing', icon: <MapPin className="w-5 h-5" />, roles: ['admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier', 'hoof_admin'] },
   { id: 'besoekpunt-toewysing', label: 'Besoekpunt Toewysing', icon: <Home className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
@@ -99,7 +101,8 @@ const navItems: NavItem[] = [
   { id: 'gawes-soek', label: 'Gawes Soek', icon: <Sparkles className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
   { id: 'pastorale-aksie', label: 'Pastorale Aksies', icon: <Heart className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin'] },
   { id: 'missionale-bediening', label: 'Missionale Bediening', icon: <Sparkles className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'krisis', label: 'Krisisverslae', icon: <AlertTriangle className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin'] },
+  { id: 'krisis', label: 'Krisisverslae', icon: <AlertTriangle className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin', 'predikant'] },
+  { id: 'krisis-bestuur', label: 'Krisisbestuur', icon: <Shield className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin', 'predikant'] },
   { id: 'bedieningsbehoeftes', label: 'Bedieningsbehoeftes', icon: <Handshake className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin', 'predikant'], excludeRoles: ['lidmaat'] },
   { id: 'program', label: 'Gemeenteprogram', icon: <Calendar className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
   { id: 'vrae', label: 'Vrae & Versoeke', icon: <HelpCircle className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
@@ -109,6 +112,7 @@ const navItems: NavItem[] = [
   { id: 'kuberkermis', label: 'Kuberkermis', icon: <ShoppingBag className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'] },
   { id: 'vanlyn-bestuur', label: 'Van-lyn-af Bestuur', icon: <HardDrive className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
   { id: 'hulp-tutoriale', label: 'Gebruiksaanwysings', icon: <BookOpenCheck className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'] },
+  { id: 'musiek', label: 'Musiek', icon: <Music className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
   { id: 'omsendbrief-kletsbot', label: 'Omsendbrief Kletsbot', icon: <MessageCircle className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'], sectionLabel: 'Meer' },
   { id: 'admin', label: 'Administrasie', icon: <Settings className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
 ];
