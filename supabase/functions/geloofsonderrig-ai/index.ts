@@ -386,7 +386,7 @@ Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
 
             const finalPrompt = (imgPrompt || `Vibrant Christian infographic, dark navy background with stars and paint splashes, floating sticker sections, turquoise purple yellow coral palette, youth-friendly hand-drawn style`).substring(0, 1000);
 
-            const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`;
+            const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${GEMINI_API_KEY}`;
             const imgResponse = await fetch(imagenUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -408,7 +408,7 @@ Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
                 success: !!imageBase64,
                 data: { imageBase64, mimeType: "image/png" },
                 error: !imageBase64 ? (imgData?.error?.message || "Image generation failed") : undefined,
-                v: "5.3.0"
+                v: "5.4.0"
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
