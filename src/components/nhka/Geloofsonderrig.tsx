@@ -2612,103 +2612,135 @@ const Geloofsonderrig: React.FC = () => {
           </div>
 
           <div className="px-4 space-y-4">
-        {/* Mobile Warning */}
-        <div className="md:hidden bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-lg mb-2">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-            <p className="text-amber-700 text-xs font-medium">
-              {language === 'af'
-                ? "Die gesprek en oefeninge werk die beste op 'n groter skerm."
-                : "The conversation and exercises work best on a larger screen."}
-            </p>
-          </div>
-        </div>
+            {/* Mobile Warning */}
+            <div className="md:hidden bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-lg mb-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <p className="text-amber-700 text-xs font-medium">
+                  {language === 'af'
+                    ? "Die gesprek en oefeninge werk die beste op 'n groter skerm."
+                    : "The conversation and exercises work best on a larger screen."}
+                </p>
+              </div>
+            </div>
 
-        <div className="flex items-center gap-4 flex-wrap">
-          <Button
-            variant="outline"
-            size="lg"
-            className="text-xl font-bold px-8 py-6 border-2 border-purple-400 bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 text-purple-800 shadow-lg"
-              onClick={() => {
-                const currentDone = vordering.some(v => v.les_id === selectedLes.id && v.voltooi);
-                if (!currentDone) {
-                  setShowVolgendeLesWarning(true);
-                  return;
-                }
-                if (currentGemeente && !currentGemeente.is_demo && !hasGeloofsonderrigBetaal) {
-                  setShowGeloofsonderrigPayView(true);
-                  return;
-                }
-                const idx = lesse.findIndex(l => l.id === selectedLes.id);
-                const nextLes = idx >= 0 && idx < lesse.length - 1 ? lesse[idx + 1] : null;
-                if (nextLes) {
-                  setSelectedLes(nextLes);
-                  setLeerderView('les');
-                  setShowVerkenningModal(false);
-                  fetchVrae(nextLes.id);
-                } else {
-                  setSelectedLes(null);
-                  setLeerderView('onderwerpe');
-                  setShowVerkenningModal(false);
-                  fetchVordering();
-                }
-              }}
-            >
-              <ChevronRight className="w-7 h-7 mr-2" />{language === 'af' ? 'Volgende les' : 'Next lesson'}
-            </Button>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold truncate text-purple-900">{selectedLes.titel}</h2>
-            <p className="text-sm text-purple-600">{language === 'af' ? 'Interaktiewe Verkenning' : 'Interactive Exploration'}</p>
-          </div>
-        </div>
+            <div className="flex items-center gap-4 flex-wrap">
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-xl font-bold px-8 py-6 border-2 border-purple-400 bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 text-purple-800 shadow-lg"
+                onClick={() => {
+                  const currentDone = vordering.some(v => v.les_id === selectedLes.id && v.voltooi);
+                  if (!currentDone) {
+                    setShowVolgendeLesWarning(true);
+                    return;
+                  }
+                  if (currentGemeente && !currentGemeente.is_demo && !hasGeloofsonderrigBetaal) {
+                    setShowGeloofsonderrigPayView(true);
+                    return;
+                  }
+                  const idx = lesse.findIndex(l => l.id === selectedLes.id);
+                  const nextLes = idx >= 0 && idx < lesse.length - 1 ? lesse[idx + 1] : null;
+                  if (nextLes) {
+                    setSelectedLes(nextLes);
+                    setLeerderView('les');
+                    setShowVerkenningModal(false);
+                    fetchVrae(nextLes.id);
+                  } else {
+                    setSelectedLes(null);
+                    setLeerderView('onderwerpe');
+                    setShowVerkenningModal(false);
+                    fetchVordering();
+                  }
+                }}
+              >
+                <ChevronRight className="w-7 h-7 mr-2" />{language === 'af' ? 'Volgende les' : 'Next lesson'}
+              </Button>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-bold truncate text-purple-900">{selectedLes.titel}</h2>
+                <p className="text-sm text-purple-600">{language === 'af' ? 'Interaktiewe Verkenning' : 'Interactive Exploration'}</p>
+              </div>
+            </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => setShowQuiz(true)}
-            disabled={quizLoading || quizQuestions.length === 0}
-            variant="outline"
-            className="bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700"
-          >
-            {quizLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{language === 'af' ? 'Genereer...' : 'Generating...'}</> : <>{language === 'af' ? 'Vrae' : 'Questions'} ({answeredQuizCount}/5)</>}
-          </Button>
-          <Button
-            onClick={() => { setVerseToOpen(undefined); setShowVerses(true); }}
-            disabled={versesLoading || lessonVerses.length === 0}
-            variant="outline"
-            className="bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700"
-          >
-            {versesLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{language === 'af' ? 'Genereer...' : 'Generating...'}</> : <>📖 Verse ({completedVersesCount}/3)</>}
-          </Button>
-        </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => setShowQuiz(true)}
+                disabled={quizLoading || quizQuestions.length === 0}
+                variant="outline"
+                className="bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700"
+              >
+                {quizLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{language === 'af' ? 'Genereer...' : 'Generating...'}</> : <>{language === 'af' ? 'Vrae' : 'Questions'} ({answeredQuizCount}/5)</>}
+              </Button>
+              <Button
+                onClick={() => { setVerseToOpen(undefined); setShowVerses(true); }}
+                disabled={versesLoading || lessonVerses.length === 0}
+                variant="outline"
+                className="bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700"
+              >
+                {versesLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{language === 'af' ? 'Genereer...' : 'Generating...'}</> : <>📖 Verse ({completedVersesCount}/3)</>}
+              </Button>
+            </div>
 
-        <Card className="flex-1 border-2 border-purple-200 bg-gradient-to-b from-white to-purple-50/30 shadow-lg ring-2 ring-purple-100">
-          <ScrollArea className="h-[420px] p-4 geloofsonderrig-scroll">
-            <div className="space-y-4">
-              {chatMessages.map((msg, i) => (
-                <div key={i} className="space-y-3">
-                  <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-2xl p-4 ${msg.role === 'user' ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-br-md shadow-md' : 'bg-gradient-to-r from-purple-50 to-pink-50 text-gray-800 rounded-bl-md border-2 border-purple-200 shadow-sm'}`}>
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+            <Card className="flex-1 border-2 border-purple-200 bg-gradient-to-b from-white to-purple-50/30 shadow-lg ring-2 ring-purple-100">
+              <ScrollArea className="h-[420px] p-4 geloofsonderrig-scroll">
+                <div className="space-y-4">
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className="space-y-3">
+                      <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-2xl p-4 ${msg.role === 'user' ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-br-md shadow-md' : 'bg-gradient-to-r from-purple-50 to-pink-50 text-gray-800 rounded-bl-md border-2 border-purple-200 shadow-sm'}`}>
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                        </div>
+                      </div>
+
+                      {msg.role === 'assistant' && (
+                        <div className="flex justify-start pl-2 gap-2 mt-2 flex-wrap">
+                          <Button size="sm" variant="outline" className="text-xs bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700" onClick={handleGenerateMindMap} disabled={generatingMindMap}>
+                            {generatingMindMap ? (<><Loader2 className="w-3 h-3 mr-1 animate-spin" />{t.learner.creating}</>) : (<><Network className="w-3 h-3 mr-1" />{t.learner.createMindMap}</>)}
+                          </Button>
+                        </div>
+                      )}
+
+                      {msg.role === 'assistant' && i === chatMessages.length - 1 && msg.suggestedPrompts && msg.suggestedPrompts.length > 0 && !chatLoading && (
+                        <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 rounded-xl border-2 border-amber-200 shadow-sm">
+                          <p className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                            <Lightbulb className="w-4 h-4 text-amber-600" />
+                            ✨ {t.learner.whatNext}
+                          </p>
+                          <div className="space-y-2">
+                            {msg.suggestedPrompts.map((prompt, pi) => (
+                              <button key={pi} className="w-full text-left p-3 rounded-xl bg-white border-2 border-amber-200 hover:border-amber-400 hover:bg-amber-50 transition-all duration-200 group shadow-sm" onClick={() => handlePromptSelect(prompt)} disabled={chatLoading}>
+                                <div className="flex items-start gap-3">
+                                  <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
+                                    <ChevronRight className="w-4 h-4 text-amber-600" />
+                                  </div>
+                                  <span className="text-sm text-gray-700 leading-relaxed">{prompt}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  ))}
 
-                  {msg.role === 'assistant' && (
-                    <div className="flex justify-start pl-2 gap-2 mt-2 flex-wrap">
-                      <Button size="sm" variant="outline" className="text-xs bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700" onClick={handleGenerateMindMap} disabled={generatingMindMap}>
-                        {generatingMindMap ? (<><Loader2 className="w-3 h-3 mr-1 animate-spin" />{t.learner.creating}</>) : (<><Network className="w-3 h-3 mr-1" />{t.learner.createMindMap}</>)}
-                      </Button>
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 rounded-2xl rounded-bl-md p-4 flex items-center gap-3">
+                        <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+                        <span className="text-sm text-gray-600">{t.learner.thinking}</span>
+                      </div>
                     </div>
                   )}
 
-                  {msg.role === 'assistant' && i === chatMessages.length - 1 && msg.suggestedPrompts && msg.suggestedPrompts.length > 0 && !chatLoading && (
-                    <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 rounded-xl border-2 border-amber-200 shadow-sm">
+                  {chatMessages.length === 0 && !chatLoading && availablePrompts.length > 0 && (
+                    <div className="p-4 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 rounded-xl border-2 border-amber-200 shadow-sm">
                       <p className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
                         <Lightbulb className="w-4 h-4 text-amber-600" />
-                        ✨ {t.learner.whatNext}
+                        ✨ {t.learner.chooseQuestion}
                       </p>
                       <div className="space-y-2">
-                        {msg.suggestedPrompts.map((prompt, pi) => (
-                          <button key={pi} className="w-full text-left p-3 rounded-xl bg-white border-2 border-amber-200 hover:border-amber-400 hover:bg-amber-50 transition-all duration-200 group shadow-sm" onClick={() => handlePromptSelect(prompt)} disabled={chatLoading}>
+                        {availablePrompts.map((prompt, pi) => (
+                          <button key={pi} className="w-full text-left p-3 rounded-xl bg-white border-2 border-amber-200 hover:border-amber-400 hover:bg-amber-50 transition-all duration-200 group shadow-sm" onClick={() => handlePromptSelect(prompt)}>
                             <div className="flex items-start gap-3">
                               <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
                                 <ChevronRight className="w-4 h-4 text-amber-600" />
@@ -2721,227 +2753,195 @@ const Geloofsonderrig: React.FC = () => {
                     </div>
                   )}
                 </div>
-              ))}
 
-              {chatLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-2xl rounded-bl-md p-4 flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
-                    <span className="text-sm text-gray-600">{t.learner.thinking}</span>
+                {/* Free-form Input - baie duidelik en kleurvol */}
+                <div className="mt-4 p-4 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-100 rounded-2xl border-2 border-amber-300 shadow-lg">
+                  <p className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4" />
+                    {language === 'af' ? 'Tik jou eie vraag hier:' : 'Type your own question here:'}
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={freeInput}
+                      onChange={(e) => setFreeInput(e.target.value)}
+                      placeholder={language === 'af' ? "Vra enige vraag oor die les hier" : "Ask any question about the lesson here"}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && freeInput.trim()) {
+                          handlePromptSelect(freeInput);
+                          setFreeInput('');
+                          setOwnQuestionsCount(prev => prev + 1);
+                        }
+                      }}
+                      className="flex-1 border-2 border-amber-300 bg-white text-base py-4 rounded-xl placeholder:text-amber-600/80 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                    />
+                    <Button
+                      onClick={() => {
+                        if (freeInput.trim()) {
+                          handlePromptSelect(freeInput);
+                          setFreeInput('');
+                          setOwnQuestionsCount(prev => prev + 1);
+                        }
+                      }}
+                      disabled={!freeInput.trim() || chatLoading}
+                      className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold px-6 py-4 rounded-xl shadow-md"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                    </Button>
                   </div>
                 </div>
-              )}
+              </ScrollArea>
+            </Card>
 
-              {chatMessages.length === 0 && !chatLoading && availablePrompts.length > 0 && (
-                <div className="p-4 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 rounded-xl border-2 border-amber-200 shadow-sm">
-                  <p className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-amber-600" />
-                    ✨ {t.learner.chooseQuestion}
-                  </p>
-                  <div className="space-y-2">
-                    {availablePrompts.map((prompt, pi) => (
-                      <button key={pi} className="w-full text-left p-3 rounded-xl bg-white border-2 border-amber-200 hover:border-amber-400 hover:bg-amber-50 transition-all duration-200 group shadow-sm" onClick={() => handlePromptSelect(prompt)}>
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
-                            <ChevronRight className="w-4 h-4 text-amber-600" />
-                          </div>
-                          <span className="text-sm text-gray-700 leading-relaxed">{prompt}</span>
+            {/* Bible Drill Section - click any verse for fill-in-blanks */}
+            {bibleVerses.length > 0 && (
+              <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-indigo-800 font-bold">
+                    <BookOpen className="w-5 h-5" />
+                    📖 {language === 'af' ? 'Bybelkennis' : 'Bible Knowledge'} ({completedVersesCount}/3)
+                  </CardTitle>
+                  <p className="text-xs text-indigo-600 -mt-2">{language === 'af' ? 'Klik op enige vers vir die ontbrekende woorde oefening' : 'Click any verse for the fill-in-the-blanks exercise'}</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {bibleVerses.map((v, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => { setVerseToOpen(i); setShowVerses(true); }}
+                        className={`text-left p-4 rounded-xl border-2 shadow-sm flex flex-col justify-between transition-all hover:shadow-lg hover:scale-[1.02] ${verseState[i] ? 'bg-green-50 border-green-300' : 'bg-white border-indigo-100 hover:border-indigo-300'}`}
+                      >
+                        <div>
+                          <h4 className="font-bold text-indigo-900 mb-2">{v.reference}</h4>
+                          <p className="text-sm text-gray-600 italic mb-4 line-clamp-2">"{v.text}"</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          {verseState[i] ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <BookOpen className="w-4 h-4 text-indigo-500" />}
+                          <span className={verseState[i] ? 'text-green-700 font-medium' : 'text-indigo-600'}>
+                            {verseState[i] ? (language === 'af' ? 'Gedoen! ✓' : 'Done! ✓') : (language === 'af' ? 'Klik vir oefening' : 'Click for exercise')}
+                          </span>
                         </div>
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Free-form Input - baie duidelik en kleurvol */}
-            <div className="mt-4 p-4 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-100 rounded-2xl border-2 border-amber-300 shadow-lg">
-              <p className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
-                <MessageCircle className="w-4 h-4" />
-                {language === 'af' ? 'Tik jou eie vraag hier:' : 'Type your own question here:'}
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  value={freeInput}
-                  onChange={(e) => setFreeInput(e.target.value)}
-                  placeholder={language === 'af' ? "Vra enige vraag oor die les hier" : "Ask any question about the lesson here"}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && freeInput.trim()) {
-                      handlePromptSelect(freeInput);
-                      setFreeInput('');
-                      setOwnQuestionsCount(prev => prev + 1);
-                    }
-                  }}
-                  className="flex-1 border-2 border-amber-300 bg-white text-base py-4 rounded-xl placeholder:text-amber-600/80 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                />
+            {
+              lesVisualiserings.length > 0 && (
+                <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2 text-purple-800">
+                      <ImageIcon className="w-5 h-5 text-purple-600" />
+                      {t.learner.yourArtworks} ({lesVisualiserings.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                      {lesVisualiserings.map((vis) => (
+                        <button
+                          key={vis.id}
+                          type="button"
+                          onClick={() => setSelectedImageForView(vis)}
+                          className="relative group rounded-xl overflow-hidden border-2 border-purple-200 hover:border-purple-500 hover:shadow-lg transition-all focus:ring-2 focus:ring-purple-400 focus:ring-offset-2"
+                        >
+                          <div className="aspect-square">
+                            <img src={vis.imageUrl} alt={vis.prompt} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                            <ImageIcon className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-opacity" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            }
+
+            <div className="sticky bottom-0 bg-gradient-to-r from-purple-50 to-pink-50 pt-4 pb-2 -mx-4 px-4 border-t-2 border-purple-200 shadow-xl flex flex-col gap-2">
+              <div className="flex gap-3">
                 <Button
+                  variant="outline"
+                  size="lg"
+                  className="flex-1 py-6 text-xl font-bold border-2 border-purple-400 bg-white text-purple-800 hover:bg-purple-50 shadow-lg"
                   onClick={() => {
-                    if (freeInput.trim()) {
-                      handlePromptSelect(freeInput);
-                      setFreeInput('');
-                      setOwnQuestionsCount(prev => prev + 1);
+                    const currentDone = vordering.some(v => v.les_id === selectedLes.id && v.voltooi);
+                    if (!currentDone) {
+                      setShowVolgendeLesWarning(true);
+                      return;
+                    }
+                    if (currentGemeente && !currentGemeente.is_demo && !hasGeloofsonderrigBetaal) {
+                      setShowGeloofsonderrigPayView(true);
+                      return;
+                    }
+                    const idx = lesse.findIndex(l => l.id === selectedLes.id);
+                    const nextLes = idx >= 0 && idx < lesse.length - 1 ? lesse[idx + 1] : null;
+                    if (nextLes) {
+                      setSelectedLes(nextLes);
+                      setLeerderView('les');
+                      setShowVerkenningModal(false);
+                      fetchVrae(nextLes.id);
+                    } else {
+                      setSelectedLes(null);
+                      setLeerderView('onderwerpe');
+                      setShowVerkenningModal(false);
+                      fetchVordering();
                     }
                   }}
-                  disabled={!freeInput.trim() || chatLoading}
-                  className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold px-6 py-4 rounded-xl shadow-md"
                 >
-                  <MessageCircle className="w-5 h-5" />
+                  <ChevronRight className="w-7 h-7 mr-2" />{language === 'af' ? 'Volgende les' : 'Next lesson'}
+                </Button>
+                <Button
+                  className={`flex-[2] py-6 text-xl font-bold transition-all disabled:opacity-100 ${canComplete ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-xl' : 'bg-gray-100 text-gray-800 border-2 border-gray-300 cursor-not-allowed'}`}
+                  onClick={handleCompleteLesVerkenning}
+                  disabled={!canComplete}
+                >
+                  <CheckCircle2 className={`w-6 h-6 mr-2 ${canComplete ? 'text-white' : 'text-gray-600'}`} />
+                  {canComplete ? t.learner.completeLesson : (language === 'af' ? 'Voltooi alle aktiwiteite om voort te gaan' : 'Complete all activities to continue')}
                 </Button>
               </div>
             </div>
-          </ScrollArea>
-        </Card>
 
-        {/* Bible Drill Section - click any verse for fill-in-blanks */}
-        {bibleVerses.length > 0 && (
-          <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-indigo-800 font-bold">
-                <BookOpen className="w-5 h-5" />
-                📖 {language === 'af' ? 'Bybelkennis' : 'Bible Knowledge'} ({completedVersesCount}/3)
-              </CardTitle>
-              <p className="text-xs text-indigo-600 -mt-2">{language === 'af' ? 'Klik op enige vers vir die ontbrekende woorde oefening' : 'Click any verse for the fill-in-the-blanks exercise'}</p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {bibleVerses.map((v, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => { setVerseToOpen(i); setShowVerses(true); }}
-                    className={`text-left p-4 rounded-xl border-2 shadow-sm flex flex-col justify-between transition-all hover:shadow-lg hover:scale-[1.02] ${verseState[i] ? 'bg-green-50 border-green-300' : 'bg-white border-indigo-100 hover:border-indigo-300'}`}
-                  >
-                    <div>
-                      <h4 className="font-bold text-indigo-900 mb-2">{v.reference}</h4>
-                      <p className="text-sm text-gray-600 italic mb-4 line-clamp-2">"{v.text}"</p>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      {verseState[i] ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <BookOpen className="w-4 h-4 text-indigo-500" />}
-                      <span className={verseState[i] ? 'text-green-700 font-medium' : 'text-indigo-600'}>
-                        {verseState[i] ? (language === 'af' ? 'Gedoen! ✓' : 'Done! ✓') : (language === 'af' ? 'Klik vir oefening' : 'Click for exercise')}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+            {/* Quiz Modal */}
+            {showQuiz && quizQuestions.length > 0 && (
+              <QuizComponent
+                questions={quizQuestions}
+                onComplete={(score) => {
+                  setAnsweredQuizCount(5); // All 5 questions answered
+                  setShowQuiz(false);
+                  awardPunte('quiz', score * 2, selectedLes?.id); // 2 punte per korrekte antwoord
+                  toast({
+                    title: language === 'af' ? 'Quiz Voltooi!' : 'Quiz Complete!',
+                    description: `Jy het ${score} uit ${quizQuestions.length} korrek! +${score * 2} punte!`,
+                  });
+                }}
+                onClose={() => setShowQuiz(false)}
+              />
+            )}
 
-        {
-          lesVisualiserings.length > 0 && (
-            <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2 text-purple-800">
-                  <ImageIcon className="w-5 h-5 text-purple-600" />
-                  {t.learner.yourArtworks} ({lesVisualiserings.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                  {lesVisualiserings.map((vis) => (
-                    <button
-                      key={vis.id}
-                      type="button"
-                      onClick={() => setSelectedImageForView(vis)}
-                      className="relative group rounded-xl overflow-hidden border-2 border-purple-200 hover:border-purple-500 hover:shadow-lg transition-all focus:ring-2 focus:ring-purple-400 focus:ring-offset-2"
-                    >
-                      <div className="aspect-square">
-                        <img src={vis.imageUrl} alt={vis.prompt} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      </div>
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                        <ImageIcon className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-opacity" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        }
-
-        <div className="sticky bottom-0 bg-gradient-to-r from-purple-50 to-pink-50 pt-4 pb-2 -mx-4 px-4 border-t-2 border-purple-200 shadow-xl flex flex-col gap-2">
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              size="lg"
-              className="flex-1 py-6 text-xl font-bold border-2 border-purple-400 bg-white text-purple-800 hover:bg-purple-50 shadow-lg"
-              onClick={() => {
-                const currentDone = vordering.some(v => v.les_id === selectedLes.id && v.voltooi);
-                if (!currentDone) {
-                  setShowVolgendeLesWarning(true);
-                  return;
-                }
-                if (currentGemeente && !currentGemeente.is_demo && !hasGeloofsonderrigBetaal) {
-                  setShowGeloofsonderrigPayView(true);
-                  return;
-                }
-                const idx = lesse.findIndex(l => l.id === selectedLes.id);
-                const nextLes = idx >= 0 && idx < lesse.length - 1 ? lesse[idx + 1] : null;
-                if (nextLes) {
-                  setSelectedLes(nextLes);
-                  setLeerderView('les');
-                  setShowVerkenningModal(false);
-                  fetchVrae(nextLes.id);
-                } else {
-                  setSelectedLes(null);
-                  setLeerderView('onderwerpe');
-                  setShowVerkenningModal(false);
-                  fetchVordering();
-                }
-              }}
-            >
-              <ChevronRight className="w-7 h-7 mr-2" />{language === 'af' ? 'Volgende les' : 'Next lesson'}
-            </Button>
-            <Button
-              className={`flex-[2] py-6 text-xl font-bold transition-all disabled:opacity-100 ${canComplete ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-xl' : 'bg-gray-100 text-gray-800 border-2 border-gray-300 cursor-not-allowed'}`}
-              onClick={handleCompleteLesVerkenning}
-              disabled={!canComplete}
-            >
-              <CheckCircle2 className={`w-6 h-6 mr-2 ${canComplete ? 'text-white' : 'text-gray-600'}`} />
-              {canComplete ? t.learner.completeLesson : (language === 'af' ? 'Voltooi alle aktiwiteite om voort te gaan' : 'Complete all activities to continue')}
-            </Button>
-          </div>
-        </div>
-
-        {/* Quiz Modal */}
-        {showQuiz && quizQuestions.length > 0 && (
-          <QuizComponent
-            questions={quizQuestions}
-            onComplete={(score) => {
-              setAnsweredQuizCount(5); // All 5 questions answered
-              setShowQuiz(false);
-              awardPunte('quiz', score * 2, selectedLes?.id); // 2 punte per korrekte antwoord
-              toast({
-                title: language === 'af' ? 'Quiz Voltooi!' : 'Quiz Complete!',
-                description: `Jy het ${score} uit ${quizQuestions.length} korrek! +${score * 2} punte!`,
-              });
-            }}
-            onClose={() => setShowQuiz(false)}
-          />
-        )}
-
-        {/* Verse Modal - supports opening from specific verse (verseToOpen) */}
-        {showVerses && lessonVerses.length > 0 && (
-          <VerseComponent
-            verses={lessonVerses}
-            initialVerseIndex={verseToOpen !== undefined ? Math.max(0, Math.min(verseToOpen, lessonVerses.length - 1)) : 0}
-            onComplete={(score) => {
-              if (verseToOpen !== undefined) {
-                setVerseState(prev => ({ ...prev, [verseToOpen]: true }));
-              }
-              setCompletedVersesCount(prev => Math.max(prev, 3)); // Verse oefening voltooi
-              setShowVerses(false);
-              setVerseToOpen(undefined);
-              awardPunte('vers', 2, selectedLes?.id); // 2 punte per vers
-              toast({
-                title: language === 'af' ? 'Verse Voltooi! 📖' : 'Verse Complete! 📖',
-                description: `Jy het ${score} woorde korrek ingevul! +2 punte! 🎉`,
-              });
-            }}
-            onClose={() => { setShowVerses(false); setVerseToOpen(undefined); }}
-          />
-        )}
+            {/* Verse Modal - supports opening from specific verse (verseToOpen) */}
+            {showVerses && lessonVerses.length > 0 && (
+              <VerseComponent
+                verses={lessonVerses}
+                initialVerseIndex={verseToOpen !== undefined ? Math.max(0, Math.min(verseToOpen, lessonVerses.length - 1)) : 0}
+                onComplete={(score) => {
+                  if (verseToOpen !== undefined) {
+                    setVerseState(prev => ({ ...prev, [verseToOpen]: true }));
+                  }
+                  setCompletedVersesCount(prev => Math.max(prev, 3)); // Verse oefening voltooi
+                  setShowVerses(false);
+                  setVerseToOpen(undefined);
+                  awardPunte('vers', 2, selectedLes?.id); // 2 punte per vers
+                  toast({
+                    title: language === 'af' ? 'Verse Voltooi! 📖' : 'Verse Complete! 📖',
+                    description: `Jy het ${score} woorde korrek ingevul! +2 punte! 🎉`,
+                  });
+                }}
+                onClose={() => { setShowVerses(false); setVerseToOpen(undefined); }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -2956,15 +2956,15 @@ const Geloofsonderrig: React.FC = () => {
           <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm border">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="sm" onClick={() => {
-              setMode('home');
-              setMentorView('dashboard');
-              setSelectedKlas(null);
-              if (mode === 'leerder') {
-                setLeerderView('onderwerpe');
-                setSelectedLes(null);
-                setSelectedOnderwerp(null);
-              }
-            }}><Home className="w-4 h-4 mr-2" />{t.common.home}</Button>
+                setMode('home');
+                setMentorView('dashboard');
+                setSelectedKlas(null);
+                if (mode === 'leerder') {
+                  setLeerderView('onderwerpe');
+                  setSelectedLes(null);
+                  setSelectedOnderwerp(null);
+                }
+              }}><Home className="w-4 h-4 mr-2" />{t.common.home}</Button>
               <span className="text-gray-300">|</span>
               <span className="font-medium">{mode === 'mentor' ? (language === 'af' ? 'Mentor Modus' : 'Mentor Mode') : (language === 'af' ? 'Leerder Modus' : 'Learner Mode')}</span>
               <div className="flex gap-3 min-w-[320px]">
@@ -3370,6 +3370,8 @@ const CompletionVideoPlayer = ({
   const [includeName, setIncludeName] = useState(true);
   const [poem, setPoem] = useState<string | null>(null);
   const [generatingPoem, setGeneratingPoem] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [generatingMusic, setGeneratingMusic] = useState(false);
 
   // Auto-advance
   useEffect(() => {
@@ -3470,138 +3472,181 @@ const CompletionVideoPlayer = ({
 
           {currentSlide.type === 'outro' && (
             <ScrollArea className="geloofsonderrig-scroll custom-scrollbar w-full max-w-2xl h-[70vh] max-h-[520px] pr-4 animate-in fade-in slide-in-from-bottom duration-700">
-            <div className="space-y-4 pb-4">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-green-700">{language === 'af' ? 'Baie Geluk!' : 'Congratulations!'}</h2>
-              <p className="text-gray-600 text-base">{language === 'af' ? 'Jy het die les voltooi! Kies jou beloning:' : 'You completed the lesson! Choose your reward:'}</p>
-
-              {/* Gedig beloning */}
-              <div className="p-4 rounded-xl border-2 border-purple-200 bg-purple-50/50 space-y-3">
-                <h3 className="font-bold text-purple-800 flex items-center gap-2 text-sm">
-                  <PenLine className="w-4 h-4" />
-                  {language === 'af' ? 'Skep Gedig' : 'Create Poem'}
-                </h3>
-                <p className="text-sm text-purple-600">{language === 'af' ? 'Laat KI \'n gedig maak uit die les.' : 'Let AI create a poem from the lesson.'}</p>
-                <Button
-                  variant="outline"
-                  className="w-full border-purple-300 hover:bg-purple-100 text-purple-700"
-                  disabled={generatingPoem || !onInvokeAI}
-                  onClick={async () => {
-                    if (!onInvokeAI || !lessonContent) return;
-                    setGeneratingPoem(true);
-                    try {
-                      const result = await onInvokeAI('generate_poem', { lesInhoud: lessonContent, lesTitel: lessonTitle, language });
-                      if (result?.success && result?.data?.poem) {
-                        setPoem(result.data.poem);
-                        onAwardPunte?.('gedig', 3, lesId);
-                        toast({ title: language === 'af' ? 'Gedig geskep! +3 punte!' : 'Poem created! +3 points!' });
-                      } else throw new Error(result?.error || 'Failed');
-                    } catch (e: any) {
-                      toast({ title: language === 'af' ? 'Kon nie gedig genereer nie' : 'Could not generate poem', variant: 'destructive' });
-                    } finally {
-                      setGeneratingPoem(false);
-                    }
-                  }}
-                >
-                  {generatingPoem ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PenLine className="w-4 h-4 mr-2" />}
-                  {generatingPoem ? (language === 'af' ? 'Genereer...' : 'Generating...') : (language === 'af' ? 'Skep Gedig' : 'Create Poem')}
-                </Button>
-                {poem && (
-                  <>
-                    <div className="mt-2 p-3 bg-white rounded-lg border border-purple-200 text-sm text-purple-900 whitespace-pre-wrap">{poem}</div>
-                    <Button variant="outline" size="sm" className="mt-2 border-purple-300 text-purple-700" onClick={() => {
-                      const blob = new Blob([poem], { type: 'text/plain;charset=utf-8' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a'); a.href = url; a.download = `gedig_${lessonTitle?.replace(/\s+/g, '_') || 'les'}.txt`; a.click();
-                      toast({ title: language === 'af' ? 'Gedig afgelaai!' : 'Poem downloaded!' });
-                    }}>
-                      <Download className="w-4 h-4 mr-1" />{language === 'af' ? 'Laai gedig af' : 'Download poem'}
-                    </Button>
-                  </>
-                )}
-              </div>
-
-              {/* Jou prente (gegenereer in die les) - met aflaai */}
-              {(() => {
-                const imgSlides = slides.filter((s: any) => s.type === 'image');
-                if (imgSlides.length === 0) return null;
-                return (
-                  <div className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50/50 space-y-3">
-                    <h3 className="font-bold text-blue-800 flex items-center gap-2">
-                      <ImageIcon className="w-5 h-5" />
-                      {language === 'af' ? 'Jou prente (gegenereer in die les)' : 'Your pictures (generated in lesson)'}
-                    </h3>
-                    <div className="flex gap-3 flex-wrap">
-                      {imgSlides.map((s: any, i: number) => (
-                        <div key={i} className="relative group">
-                          <img src={s.url} alt="" className="h-24 w-24 object-cover rounded-xl border-2 border-blue-200 shadow-md" />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="absolute bottom-1 right-1 opacity-90 group-hover:opacity-100 bg-white border-blue-300 text-blue-700"
-                            onClick={() => {
-                              const a = document.createElement('a');
-                              a.href = s.url;
-                              a.download = `prent_${lessonTitle?.replace(/\s+/g, '_') || 'les'}_${i + 1}.png`;
-                              a.click();
-                            }}
-                          >
-                            <Download className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-blue-300 text-blue-700"
-                      onClick={() => {
-                        imgSlides.forEach((s: any, i: number) => {
-                          const a = document.createElement('a');
-                          a.href = s.url;
-                          a.download = `prent_${lessonTitle?.replace(/\s+/g, '_') || 'les'}_${i + 1}.png`;
-                          a.click();
-                        });
-                      }}
-                    >
-                      <Download className="w-4 h-4 mr-1" />{language === 'af' ? 'Laai al prente af' : 'Download all pictures'}
-                    </Button>
-                  </div>
-                );
-              })()}
-
-              <div className="border-t pt-4 space-y-3">
-                <p className="text-gray-600 text-base">{language === 'af' ? 'Wat het hierdie les vir jou beteken?' : 'What did this lesson mean to you?'}</p>
-                <Textarea
-                  value={meaning}
-                  onChange={(e) => setMeaning(e.target.value)}
-                  placeholder={language === 'af' ? 'Tik jou gedagtes hier...' : 'Type your thoughts here...'}
-                  className="min-h-[72px] text-sm p-3 border-2 border-gray-200 focus:border-green-500 rounded-xl resize-none"
-                />
-                <div className="flex items-center gap-3 justify-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-                  <Switch checked={includeName} onCheckedChange={setIncludeName} id="name-toggle" />
-                  <Label htmlFor="name-toggle" className="text-base cursor-pointer">{language === 'af' ? 'Sit my naam by' : 'Include my name'}</Label>
+              <div className="space-y-4 pb-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-8 h-8 text-green-600" />
                 </div>
-                <div className="flex flex-col gap-2">
+                <h2 className="text-2xl font-bold text-green-700">{language === 'af' ? 'Baie Geluk!' : 'Congratulations!'}</h2>
+                <p className="text-gray-600 text-base">{language === 'af' ? 'Jy het die les voltooi! Kies jou beloning:' : 'You completed the lesson! Choose your reward:'}</p>
+
+                {/* Gedig beloning */}
+                <div className="p-4 rounded-xl border-2 border-purple-200 bg-purple-50/50 space-y-3">
+                  <h3 className="font-bold text-purple-800 flex items-center gap-2 text-sm">
+                    <PenLine className="w-4 h-4" />
+                    {language === 'af' ? 'Skep Gedig' : 'Create Poem'}
+                  </h3>
+                  <p className="text-sm text-purple-600">{language === 'af' ? 'Laat KI \'n gedig maak uit die les.' : 'Let AI create a poem from the lesson.'}</p>
                   <Button
-                    className="w-full h-11 text-base bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!meaning.trim()}
-                    onClick={() => {
-                      const firstImg = slides.find((s: any) => s.type === 'image');
-                      const imgBase64 = firstImg?.url?.includes(',') ? firstImg.url.split(',')[1] : undefined;
-                      onShare({ meaning, includeName, imageBase64: imgBase64, poem });
+                    variant="outline"
+                    className="w-full border-purple-300 hover:bg-purple-100 text-purple-700"
+                    disabled={generatingPoem || !onInvokeAI}
+                    onClick={async () => {
+                      if (!onInvokeAI || !lessonContent) return;
+                      setGeneratingPoem(true);
+                      try {
+                        const result = await onInvokeAI('generate_poem', { lesInhoud: lessonContent, lesTitel: lessonTitle, language });
+                        if (result?.success && result?.data?.poem) {
+                          setPoem(result.data.poem);
+                          onAwardPunte?.('gedig', 3, lesId);
+                          toast({ title: language === 'af' ? 'Gedig geskep! +3 punte!' : 'Poem created! +3 points!' });
+                        } else throw new Error(result?.error || 'Failed');
+                      } catch (e: any) {
+                        toast({ title: language === 'af' ? 'Kon nie gedig genereer nie' : 'Could not generate poem', variant: 'destructive' });
+                      } finally {
+                        setGeneratingPoem(false);
+                      }
                     }}
                   >
-                    <Share2 className="w-5 h-5 mr-2" /> {language === 'af' ? 'Deel op Facebook en Instagram' : 'Share on Facebook and Instagram'}
+                    {generatingPoem ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PenLine className="w-4 h-4 mr-2" />}
+                    {generatingPoem ? (language === 'af' ? 'Genereer...' : 'Generating...') : (language === 'af' ? 'Skep Gedig' : 'Create Poem')}
                   </Button>
-                  <p className="text-xs text-gray-500 text-center">
-                    {language === 'af' ? 'Skryf eers wat die les vir jou beteken in die boksie hierbo.' : 'First write what the lesson means to you in the box above.'}
-                  </p>
+                  {poem && (
+                    <div className="space-y-3">
+                      <div className="mt-2 p-3 bg-white rounded-lg border border-purple-200 text-sm text-purple-900 whitespace-pre-wrap">{poem}</div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" className="border-purple-300 text-purple-700" onClick={() => {
+                          const blob = new Blob([poem], { type: 'text/plain;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a'); a.href = url; a.download = `gedig_${lessonTitle?.replace(/\s+/g, '_') || 'les'}.txt`; a.click();
+                          toast({ title: language === 'af' ? 'Gedig afgelaai!' : 'Poem downloaded!' });
+                        }}>
+                          <Download className="w-4 h-4 mr-1" />{language === 'af' ? 'Download' : 'Download'}
+                        </Button>
+
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-md"
+                          disabled={generatingMusic || !onInvokeAI}
+                          onClick={async () => {
+                            if (!onInvokeAI || !poem) return;
+                            setGeneratingMusic(true);
+                            try {
+                              const result = await onInvokeAI('generate_music', { poem, lesInhoud: lessonContent, lesTitel: lessonTitle });
+                              if (result?.success && result?.data?.audioUrl) {
+                                setAudioUrl(result.data.audioUrl);
+                                onAwardPunte?.('musiek', 5, lesId);
+                                toast({ title: language === 'af' ? 'Liedjie geskep! +5 punte!' : 'Song created! +5 points!' });
+                              } else throw new Error(result?.error || 'Failed');
+                            } catch (e: any) {
+                              toast({ title: language === 'af' ? 'Kon nie musiek genereer nie' : 'Could not generate music', variant: 'destructive' });
+                            } finally {
+                              setGeneratingMusic(false);
+                            }
+                          }}
+                        >
+                          {generatingMusic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                          {generatingMusic ? (language === 'af' ? 'Genereer Musiek...' : 'Generating Music...') : (language === 'af' ? 'Stel tot Musiek (Suno)' : 'Set to Music (Suno)')}
+                        </Button>
+                      </div>
+
+                      {audioUrl && (
+                        <div className="mt-4 p-4 bg-white rounded-xl border-2 border-blue-200 shadow-sm animate-in fade-in slide-in-from-top duration-500">
+                          <p className="text-xs font-bold text-blue-800 mb-2 uppercase tracking-wider">{language === 'af' ? 'Jou Liedjie' : 'Your Song'}</p>
+                          <audio src={audioUrl} controls className="w-full h-10" />
+                          <div className="mt-3 flex gap-2">
+                            <Button asChild variant="outline" size="sm" className="border-blue-300 text-blue-700">
+                              <a href={audioUrl} target="_blank" rel="noopener noreferrer" download={`liedjie_${lessonTitle?.replace(/\s+/g, '_') || 'les'}.mp3`}>
+                                <Download className="w-4 h-4 mr-1" /> {language === 'af' ? 'Laai Liedjie Af' : 'Download Song'}
+                              </a>
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Jou prente (gegenereer in die les) - met aflaai */}
+                {(() => {
+                  const imgSlides = slides.filter((s: any) => s.type === 'image');
+                  if (imgSlides.length === 0) return null;
+                  return (
+                    <div className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50/50 space-y-3">
+                      <h3 className="font-bold text-blue-800 flex items-center gap-2">
+                        <ImageIcon className="w-5 h-5" />
+                        {language === 'af' ? 'Jou prente (gegenereer in die les)' : 'Your pictures (generated in lesson)'}
+                      </h3>
+                      <div className="flex gap-3 flex-wrap">
+                        {imgSlides.map((s: any, i: number) => (
+                          <div key={i} className="relative group">
+                            <img src={s.url} alt="" className="h-24 w-24 object-cover rounded-xl border-2 border-blue-200 shadow-md" />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="absolute bottom-1 right-1 opacity-90 group-hover:opacity-100 bg-white border-blue-300 text-blue-700"
+                              onClick={() => {
+                                const a = document.createElement('a');
+                                a.href = s.url;
+                                a.download = `prent_${lessonTitle?.replace(/\s+/g, '_') || 'les'}_${i + 1}.png`;
+                                a.click();
+                              }}
+                            >
+                              <Download className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-blue-300 text-blue-700"
+                        onClick={() => {
+                          imgSlides.forEach((s: any, i: number) => {
+                            const a = document.createElement('a');
+                            a.href = s.url;
+                            a.download = `prent_${lessonTitle?.replace(/\s+/g, '_') || 'les'}_${i + 1}.png`;
+                            a.click();
+                          });
+                        }}
+                      >
+                        <Download className="w-4 h-4 mr-1" />{language === 'af' ? 'Laai al prente af' : 'Download all pictures'}
+                      </Button>
+                    </div>
+                  );
+                })()}
+
+                <div className="border-t pt-4 space-y-3">
+                  <p className="text-gray-600 text-base">{language === 'af' ? 'Wat het hierdie les vir jou beteken?' : 'What did this lesson mean to you?'}</p>
+                  <Textarea
+                    value={meaning}
+                    onChange={(e) => setMeaning(e.target.value)}
+                    placeholder={language === 'af' ? 'Tik jou gedagtes hier...' : 'Type your thoughts here...'}
+                    className="min-h-[72px] text-sm p-3 border-2 border-gray-200 focus:border-green-500 rounded-xl resize-none"
+                  />
+                  <div className="flex items-center gap-3 justify-center bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <Switch checked={includeName} onCheckedChange={setIncludeName} id="name-toggle" />
+                    <Label htmlFor="name-toggle" className="text-base cursor-pointer">{language === 'af' ? 'Sit my naam by' : 'Include my name'}</Label>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      className="w-full h-11 text-base bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!meaning.trim()}
+                      onClick={() => {
+                        const firstImg = slides.find((s: any) => s.type === 'image');
+                        const imgBase64 = firstImg?.url?.includes(',') ? firstImg.url.split(',')[1] : undefined;
+                        onShare({ meaning, includeName, imageBase64: imgBase64, poem });
+                      }}
+                    >
+                      <Share2 className="w-5 h-5 mr-2" /> {language === 'af' ? 'Deel op Facebook en Instagram' : 'Share on Facebook and Instagram'}
+                    </Button>
+                    <p className="text-xs text-gray-500 text-center">
+                      {language === 'af' ? 'Skryf eers wat die les vir jou beteken in die boksie hierbo.' : 'First write what the lesson means to you in the box above.'}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
             </ScrollArea>
           )}
         </div>

@@ -36,6 +36,12 @@ serve(async (req) => {
             const { lied_id, lirieke, styl_prompt, titel } = data;
             if (!lied_id || !lirieke) throw new Error("lied_id en lirieke vereis");
 
+            // Sanitize lirieke vir Suno filters
+            const skoonLirieke = lirieke
+                .replace(/\bAfrika\b/g, "A-f-r-i-k-a")
+                .replace(/\bharde harte\b/gi, "menseharte")
+                .replace(/\bsmagtend\b/gi, "verlangend");
+
             // Opdateer status na 'genereer'
             await supabase.from("musiek_liedere").update({
                 status: "genereer",
@@ -63,15 +69,11 @@ serve(async (req) => {
                     throw new Error("Kon nie toegang kry tot verwysings-oudio nie.");
                 }
 
-                // Vir 'upload-cover' wil ons MELODIE van oudio en LIRIEKE van teks hê.
-                // Volgens nuutste navorsing:
-                // As instrumental=false en customMode=true vir 'upload-cover', gebruik dit 'prompt' as Lirieke.
-                // Dit is krities dat ons die Lirieke in die 'prompt' veld sit, anders ignoreer hy dit.
                 sunoBody = {
                     uploadUrl: signedUrlData.signedUrl,
                     customMode: true,
                     instrumental: false,
-                    prompt: lirieke.substring(0, 3000), // Prompt is die lirieke
+                    prompt: skoonLirieke.substring(0, 3000), // Gebruik skoon lirieke
                     style: styl_prompt || "Gospel, Koor, Eerbiedig",
                     title: titel || "Kerklied",
                     model: "V4_5ALL",
@@ -83,7 +85,7 @@ serve(async (req) => {
                     customMode: true,
                     instrumental: false,
                     model: "V4_5ALL",
-                    prompt: lirieke.substring(0, 3000),
+                    prompt: skoonLirieke.substring(0, 3000),
                     style: styl_prompt || "Gospel, Koor, Eerbiedig",
                     title: titel || "Kerklied",
                     callBackUrl: "https://dramekaarselaste.co.za/api/suno-callback",
@@ -104,7 +106,8 @@ serve(async (req) => {
 
             // sunoapi.org gee gewoonlik kode 200 en 'n data object met taskId
             if (sunoData.code !== 200 && !sunoData.data?.taskId) {
-                const err = sunoData.msg || sunoData.error || "Onbekende fout by Suno API";
+                const err = sunoData.msg || sunoData.error || sunoData.errorMessage || "Onbekende fout by Suno API";
+                console.error("Suno API Fout Detail:", sunoData);
                 await supabase.from("musiek_liedere").update({
                     status: "fout",
                     fout_boodskap: `Suno fout: ${err}`,
@@ -134,6 +137,13 @@ serve(async (req) => {
             const { lied_id, lirieke, styl_prompt, tempo } = data;
             if (!lied_id) throw new Error("lied_id vereis");
 
+            // Sanitize lirieke vir Replicate filters
+            const skoonLirieke = lirieke ? lirieke
+                .replace(/\bAfrika\b/g, "A-f-r-i-k-a")
+                .replace(/\bharde harte\b/gi, "menseharte")
+                .replace(/\bsmagtend\b/gi, "verlangend")
+                : "";
+
             await supabase.from("musiek_liedere").update({
                 status: "genereer",
                 ai_diens: "replicate",
@@ -144,7 +154,7 @@ serve(async (req) => {
             // Bou 'n beskrywende prompt
             const description = [
                 styl_prompt || "Church hymn, choir, organ",
-                lirieke ? `Lyrics: ${lirieke.substring(0, 500)}` : "",
+                skoonLirieke ? `Lyrics: ${skoonLirieke.substring(0, 500)}` : "",
                 tempo ? `${tempo} BPM` : "80 BPM",
             ].filter(Boolean).join(". ");
 

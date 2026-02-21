@@ -352,46 +352,47 @@ SKAV:[knowledge or attitude or skill or values]`;
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        // ========== GENERATE IMAGE (Imagen - flat design, symbolic, NO text) ==========
+        // ========== GENERATE IMAGE (Infographic/Teksvisualisering Style) ==========
         if (type === 'generate_image') {
             const answerText = data.answerText || data.answer || "";
             const promptText = data.promptText || data.prompt || "";
-            const lessonExcerpt = (answerText || promptText).substring(0, 500);
+            const lessonExcerpt = (answerText || promptText).substring(0, 1000);
 
-            // CRITICAL: Interpret MEANING, not literal words. E.g. "liefde" → big red heart, NOT text "liefde"
-            const visualPromptSys = `You are an expert at converting abstract concepts into visual metaphors for image generation.
+            const visualPromptSys = `You are an expert at creating visual infographics for high school students.
+            
+TASK: Create a detailed image prompt in English for a vibrant, playful Christian infographic based on the provided faith lesson content.
 
-TASK: Given faith lesson content (answer or question), create an English image prompt that VISUALIZES THE MEANING using symbols and metaphors. NEVER include any text, words, or letters in the image.
+STYLE REQUIREMENTS:
+- Vibrant, playful Christian infographic for Afrikaans high school students.
+- Background: Dark navy textured background with small stars and paint splashes.
+- Text: Bright gradient headline text with glow effect (but avoid complex text that AI might garble, focus on visual titles).
+- Shapes: Rounded speech-bubble shapes for sections.
+- Icons: Include doodle-style icons (water drops, arrows, stars, hearts).
+- Layout: Vertical poster format.
+- Palette: Turquoise, purple, yellow, and coral.
+- Visual effect: Each section must float like stickers layered on top of the background.
+- Structural elements: Large bold heading, scripture reference in a rounded banner, three colorful content boxes side by side, a cloud-shaped "problem" section, a highlighted question section, and a final call-to-action with numbered steps in large rounded shapes.
+- General style: Fun, energetic, youth-friendly, hand-drawn illustration style, high contrast.
 
-RULES:
-- INTERPRET the meaning: "liefde" → a large red heart; "geloof" → mountain or anchor; "vrede" → dove; "gebed" → hands together; "hoop" → sunrise; "vergeving" → embrace or open hands
-- Use ONLY visual symbols: hearts, mountains, doves, hands, sun, light, paths, trees, water, etc.
-- NO text, NO words, NO letters anywhere
-- Style: minimalist flat design, modern 2D illustration (like Kurzgesagt, Google Material Design, Dribbble)
-- Bright gradient backgrounds (warm sunsets, fresh blue skies, vibrant pink/purple)
-- Simple geometric shapes with soft rounded edges
-- Limited palette of 3-5 main colors per image
-- Central composition, one main visual metaphor
-- Subtle shadows and glow for depth
-- Youthful, contemporary aesthetic for 12-17 year olds
-- 1:1 square format, social media optimized
-- Fresh, energetic, positive, aspirational feel
+CONTENT TO VISUALIZE:
+${lessonExcerpt}
 
-Output ONLY the image prompt in English, max 100 words.`;
-            const visualPrompt = await callGemini(GEMINI_API_KEY, visualPromptSys,
-                `Faith lesson content to visualize (interpret the MEANING, not the words):\n${lessonExcerpt}`,
-                { temperature: 0.7 }
+Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
+
+            const imgPrompt = await callGemini(GEMINI_API_KEY, visualPromptSys,
+                `Faith lesson content to visualize:\n${lessonExcerpt}`,
+                { temperature: 0.8 }
             );
 
-            const imgPrompt = (visualPrompt || `Minimalist flat design illustration of hope and faith, large red heart symbol, warm gradient background, soft rounded shapes, no text, 1:1 square`).substring(0, 480);
+            const finalPrompt = (imgPrompt || `Vibrant Christian infographic, dark navy background with stars and paint splashes, floating sticker sections, turquoise purple yellow coral palette, youth-friendly hand-drawn style`).substring(0, 1000);
 
-            const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${GEMINI_API_KEY}`;
+            const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`;
             const imgResponse = await fetch(imagenUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    instances: [{ prompt: imgPrompt }],
-                    parameters: { sampleCount: 1, aspectRatio: "1:1" }
+                    instances: [{ prompt: finalPrompt }],
+                    parameters: { sampleCount: 1, aspectRatio: "9:16" } // Use vertical poster format as requested
                 })
             });
 
@@ -407,7 +408,7 @@ Output ONLY the image prompt in English, max 100 words.`;
                 success: !!imageBase64,
                 data: { imageBase64, mimeType: "image/png" },
                 error: !imageBase64 ? (imgData?.error?.message || "Image generation failed") : undefined,
-                v: "5.2.0"
+                v: "5.3.0"
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
