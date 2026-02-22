@@ -352,44 +352,61 @@ SKAV:[knowledge or attitude or skill or values]`;
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        // ========== GENERATE IMAGE (Infographic/Teksvisualisering Style) ==========
+        // ========== GENERATE IMAGE (Symbol-only visual — NO text/words) ==========
         if (type === 'generate_image') {
             const answerText = data.answerText || data.answer || "";
             const promptText = data.promptText || data.prompt || "";
-            const language = data.language || "af";
-            const lessonExcerpt = (answerText || promptText).substring(0, 1000);
+            const lessonExcerpt = (answerText || promptText).substring(0, 800);
 
-            const visualPromptSys = `You are an expert at creating visual infographics for high school students.
-            
-TASK: Create a detailed image prompt in English for a vibrant, playful Christian infographic based on the provided faith lesson content.
+            const visualPromptSys = `You are an expert at converting faith lesson concepts into PURELY VISUAL illustrations using symbols and metaphors. You create prompts for an AI image generator.
 
-LANGUAGE: The user's language is ${language === 'af' ? 'Afrikaans' : 'English'}. 
-CRITICAL: If the language is Afrikaans, you MUST instruct the image generator to use Afrikaans words for all headings, labels, and text elements within the image.
+ABSOLUTE RULE — NO TEXT: The image must contain ZERO text, ZERO words, ZERO letters, ZERO numbers anywhere. Not in banners, not in speech bubbles, not in labels. The AI image generator CANNOT render readable text — any attempt results in ugly garbled nonsense. Use ONLY visual symbols.
 
-STYLE REQUIREMENTS:
-- Vibrant, playful Christian infographic for ${language === 'af' ? 'Afrikaans' : 'English'} high school students.
-- Background: Dark navy textured background with small stars and paint splashes.
-- Text Rendering: Use bold, clean, easy-to-read font for headings. ${language === 'af'
-                    ? "All text shown in the image MUST be in Afrikaans (e.g., 'DIE PROBLEEM', 'GOD SE PLAN', 'STAP 1', 'BYBEL')."
-                    : "All text shown in the image MUST be in English (e.g., 'THE PROBLEM', 'GOD'S PLAN', 'STEP 1', 'BIBLE')."}
-- Shapes: Rounded speech-bubble shapes for sections.
-- Icons: Include doodle-style icons (water drops, arrows, stars, hearts).
-- Layout: Vertical poster format (9:16).
-- Palette: Turquoise, purple, yellow, and coral.
-- Visual effect: Each section must float like stickers layered on top of the background.
-- Structural elements: Large bold heading in Afrikaans, scripture reference in a rounded banner, three colorful content boxes, a cloud-shaped "problem" section, and a call-to-action with numbered steps.
+TASK: Given the lesson content below, create an English image-generation prompt that tells a visual story using only icons, symbols, and metaphors.
 
-CONTENT TO VISUALIZE:
+SYMBOL DICTIONARY (use these to represent abstract ideas):
+- Love / Liefde → large glowing red heart, embrace, warm light
+- Faith / Geloof → mountain peak, anchor, lighthouse beam
+- Peace / Vrede → white dove in flight, calm blue water, olive branch
+- Prayer / Gebed → hands pressed together, beam of light upward
+- Hope / Hoop → golden sunrise over horizon, seedling sprouting
+- Forgiveness / Vergifnis → two figures embracing, broken chain
+- God's plan → winding golden path leading to bright horizon
+- Sin / Sonde → dark storm cloud, thorns, cracked ground
+- Grace / Genade → rain of golden light, rainbow after storm
+- Holy Spirit → flame, gentle wind swirls, descending dove
+- Bible / Bybel → open book with golden glow (but NO readable text on pages)
+- Community → circle of diverse stick figures holding hands
+- Sacrifice → cross silhouette against sunset
+- New life → butterfly emerging from cocoon, green shoots from dry ground
+- Guidance → compass, shining star, footprints on a path
+- Joy / Vreugde → fireworks, colorful confetti, dancing figures
+
+STYLE:
+- Vibrant, fun, youthful illustration for teenagers (12–18 years)
+- Bright saturated colors: turquoise, coral, golden yellow, purple, pink
+- Dark navy or deep blue gradient background with subtle star sparkles
+- Flat-design / modern illustration style (like Kurzgesagt or Canva)
+- Rounded, friendly shapes — circles, soft rectangles, cloud shapes
+- Cute doodle-style decorative elements: swirls, tiny stars, small hearts, arrows, sparkles
+- Clean composition with a clear central visual metaphor
+- Warm, positive, uplifting mood
+- Vertical poster layout (9:16 aspect ratio)
+- Each concept shown as a separate floating "bubble" or "sticker" arranged vertically
+- NO speech bubbles with text, NO banners with words, NO labels
+
+CONTENT TO INTERPRET VISUALLY:
 ${lessonExcerpt}
 
-Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
+Output ONLY the image prompt in English, max 120 words. Do not include quotes. Remember: ABSOLUTELY NO TEXT IN THE IMAGE.`;
 
             const imgPrompt = await callGemini(GEMINI_API_KEY, visualPromptSys,
-                `Faith lesson content to visualize:\n${lessonExcerpt}`,
-                { temperature: 0.8 }
+                `Faith lesson to visualize with symbols only (NO text):\n${lessonExcerpt}`,
+                { temperature: 0.7 }
             );
 
-            const finalPrompt = (imgPrompt || `Vibrant Christian infographic, dark navy background, floating sticker sections, turquoise purple yellow coral palette, youth-friendly style`).substring(0, 1000);
+            const fallback = `Vibrant vertical poster illustration, dark navy background with star sparkles, NO TEXT anywhere. Central glowing golden cross silhouette against sunset. Surrounding floating circular bubbles contain: red heart symbol, white dove, praying hands with light beam, open book with golden glow, seedling sprouting from soil, compass pointing upward. Cute doodle decorations: tiny stars, swirls, hearts, arrows. Bright turquoise coral yellow purple palette. Flat modern illustration style, friendly rounded shapes, warm uplifting mood, teenager-friendly design.`;
+            const finalPrompt = (imgPrompt || fallback).substring(0, 1000);
 
             const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${GEMINI_API_KEY}`;
             const imgResponse = await fetch(imagenUrl, {
@@ -413,7 +430,7 @@ Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
                 success: !!imageBase64,
                 data: { imageBase64, mimeType: "image/png" },
                 error: !imageBase64 ? (imgData?.error?.message || "Image generation failed") : undefined,
-                v: "5.5.0"
+                v: "6.0.0"
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
