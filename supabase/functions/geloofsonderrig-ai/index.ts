@@ -356,23 +356,28 @@ SKAV:[knowledge or attitude or skill or values]`;
         if (type === 'generate_image') {
             const answerText = data.answerText || data.answer || "";
             const promptText = data.promptText || data.prompt || "";
+            const language = data.language || "af";
             const lessonExcerpt = (answerText || promptText).substring(0, 1000);
 
             const visualPromptSys = `You are an expert at creating visual infographics for high school students.
             
 TASK: Create a detailed image prompt in English for a vibrant, playful Christian infographic based on the provided faith lesson content.
 
+LANGUAGE: The user's language is ${language === 'af' ? 'Afrikaans' : 'English'}. 
+CRITICAL: If the language is Afrikaans, you MUST instruct the image generator to use Afrikaans words for all headings, labels, and text elements within the image.
+
 STYLE REQUIREMENTS:
-- Vibrant, playful Christian infographic for Afrikaans high school students.
+- Vibrant, playful Christian infographic for ${language === 'af' ? 'Afrikaans' : 'English'} high school students.
 - Background: Dark navy textured background with small stars and paint splashes.
-- Text: Bright gradient headline text with glow effect (but avoid complex text that AI might garble, focus on visual titles).
+- Text Rendering: Use bold, clean, easy-to-read font for headings. ${language === 'af'
+                    ? "All text shown in the image MUST be in Afrikaans (e.g., 'DIE PROBLEEM', 'GOD SE PLAN', 'STAP 1', 'BYBEL')."
+                    : "All text shown in the image MUST be in English (e.g., 'THE PROBLEM', 'GOD'S PLAN', 'STEP 1', 'BIBLE')."}
 - Shapes: Rounded speech-bubble shapes for sections.
 - Icons: Include doodle-style icons (water drops, arrows, stars, hearts).
-- Layout: Vertical poster format.
+- Layout: Vertical poster format (9:16).
 - Palette: Turquoise, purple, yellow, and coral.
 - Visual effect: Each section must float like stickers layered on top of the background.
-- Structural elements: Large bold heading, scripture reference in a rounded banner, three colorful content boxes side by side, a cloud-shaped "problem" section, a highlighted question section, and a final call-to-action with numbered steps in large rounded shapes.
-- General style: Fun, energetic, youth-friendly, hand-drawn illustration style, high contrast.
+- Structural elements: Large bold heading in Afrikaans, scripture reference in a rounded banner, three colorful content boxes, a cloud-shaped "problem" section, and a call-to-action with numbered steps.
 
 CONTENT TO VISUALIZE:
 ${lessonExcerpt}
@@ -384,7 +389,7 @@ Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
                 { temperature: 0.8 }
             );
 
-            const finalPrompt = (imgPrompt || `Vibrant Christian infographic, dark navy background with stars and paint splashes, floating sticker sections, turquoise purple yellow coral palette, youth-friendly hand-drawn style`).substring(0, 1000);
+            const finalPrompt = (imgPrompt || `Vibrant Christian infographic, dark navy background, floating sticker sections, turquoise purple yellow coral palette, youth-friendly style`).substring(0, 1000);
 
             const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${GEMINI_API_KEY}`;
             const imgResponse = await fetch(imagenUrl, {
@@ -392,7 +397,7 @@ Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     instances: [{ prompt: finalPrompt }],
-                    parameters: { sampleCount: 1, aspectRatio: "9:16" } // Use vertical poster format as requested
+                    parameters: { sampleCount: 1, aspectRatio: "9:16" }
                 })
             });
 
@@ -408,7 +413,7 @@ Output ONLY the image prompt in English, max 150 words. Do not include quotes.`;
                 success: !!imageBase64,
                 data: { imageBase64, mimeType: "image/png" },
                 error: !imageBase64 ? (imgData?.error?.message || "Image generation failed") : undefined,
-                v: "5.4.0"
+                v: "5.5.0"
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 

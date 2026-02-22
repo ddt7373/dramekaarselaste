@@ -650,7 +650,8 @@ const Geloofsonderrig: React.FC = () => {
             type: 'generate_image',
             answerText: data.answerText ?? data.answer ?? '',
             promptText: data.promptText ?? data.prompt ?? '',
-            lesInhoud: data.lesInhoud
+            lesInhoud: data.lesInhoud,
+            language: data.language
           };
         } else if (action === 'generate_poem') {
           body = {
@@ -1554,7 +1555,8 @@ const Geloofsonderrig: React.FC = () => {
       const result = await invokeAIWithRetry('generate_image', {
         answerText: assistantMsg.content,
         promptText: userMsg?.role === 'user' ? userMsg.content : '',
-        lesInhoud: selectedLes.inhoud
+        lesInhoud: selectedLes.inhoud,
+        language
       });
 
       if (result?.success && result?.data?.imageBase64) {
