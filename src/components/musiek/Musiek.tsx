@@ -109,7 +109,7 @@ const Musiek: React.FC = () => {
                     Musiek
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
-                    Luister na AI-gegenereerde kerkliedere.
+                    Luister na kerkliedere en musiek.
                 </p>
             </div>
 

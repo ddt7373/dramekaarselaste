@@ -18,6 +18,8 @@ import {
     Sparkles,
     Pencil,
     X,
+    FileAudio,
+    Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,12 +66,17 @@ const MusiekAdmin: React.FC = () => {
     const [eieStyl, setEieStyl] = useState('');
     const [tempo, setTempo] = useState(80);
     const [aiDiens, setAiDiens] = useState<'suno' | 'replicate'>('replicate');
+    const [modus, setModus] = useState<'ai' | 'handmatig'>('ai');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [file, setFile] = useState<File | null>(null);
 
     const referenceAudioInputRef = useRef<HTMLInputElement>(null);
     const [referenceAudioFile, setReferenceAudioFile] = useState<File | null>(null);
+
+    // Handmatige MP3 oplaai
+    const mp3InputRef = useRef<HTMLInputElement>(null);
+    const [mp3File, setMp3File] = useState<File | null>(null);
 
     // Oudio speler
     const [speelId, setSpeelId] = useState<string | null>(null);
@@ -148,71 +155,147 @@ const MusiekAdmin: React.FC = () => {
         }
     };
 
+    const handleMp3Kies = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (f) {
+            setMp3File(f);
+            if (!titel) {
+                setTitel(f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
+            }
+        }
+    };
+
     const handleSkep = async () => {
         if (!titel.trim()) {
             toast.error('Titel is verplig');
             return;
         }
-        if (!lirieke.trim()) {
-            toast.error('Lirieke is verplig');
-            return;
+
+        // Handmatige modus: MP3 is verplig
+        if (modus === 'handmatig') {
+            if (!mp3File) {
+                toast.error('Kies asseblief \'n MP3-lêer om op te laai');
+                return;
+            }
+        } else {
+            // AI-modus: Lirieke is verplig
+            if (!lirieke.trim()) {
+                toast.error('Lirieke is verplig');
+                return;
+            }
         }
 
         setUploading(true);
         try {
-            const finalStyl = eieStyl.trim() || stylPrompt;
+            if (modus === 'handmatig') {
+                // === HANDMATIGE MP3 OPLAAI ===
+                // Skep rekord in databasis met status 'gereed'
+                const { data: nuwe, error: dbErr } = await supabase
+                    .from('musiek_liedere')
+                    .insert({
+                        titel: titel.trim(),
+                        lirieke: lirieke.trim() || null,
+                        styl_prompt: null,
+                        tempo: null,
+                        status: 'gereed',
+                        ai_diens: 'handmatig',
+                        opgelaai_deur: currentUser?.id,
+                    })
+                    .select('id')
+                    .single();
+                if (dbErr) throw dbErr;
 
-            // Skep rekord in databasis
-            const { data: nuwe, error: dbErr } = await supabase
-                .from('musiek_liedere')
-                .insert({
-                    titel: titel.trim(),
-                    lirieke: lirieke.trim(),
-                    styl_prompt: finalStyl,
-                    tempo,
-                    status: 'konsep',
-                    opgelaai_deur: currentUser?.id,
-                })
-                .select('id')
-                .single();
-            if (dbErr) throw dbErr;
+                if (nuwe?.id && mp3File) {
+                    // Laai MP3 op na Storage
+                    const safeName = sanitizeFileName(mp3File.name);
+                    const storagePath = `${nuwe.id}/oudio-${safeName}`;
+                    const { error: uploadErr } = await supabase.storage
+                        .from('musiek-liedere')
+                        .upload(storagePath, mp3File, { upsert: true });
+                    if (uploadErr) throw uploadErr;
 
-            // Laai bladmusiek-lêer op (opsioneel)
-            if (file && nuwe?.id) {
-                const safeName = sanitizeFileName(file.name);
-                const storagePath = `${nuwe.id}/bladmusiek-${safeName}`;
-                await supabase.storage.from('musiek-liedere').upload(storagePath, file, { upsert: true });
-                await supabase.from('musiek_liedere').update({ bladmusiek_pad: storagePath }).eq('id', nuwe.id);
-            }
+                    // Kry publieke URL
+                    const { data: pubUrl } = supabase.storage
+                        .from('musiek-liedere')
+                        .getPublicUrl(storagePath);
 
-            // Laai verwysings-oudio op (indien gekies)
-            let verwysingOudioPadRemote = null;
-            if (referenceAudioFile && nuwe?.id) {
-                const safeName = sanitizeFileName(referenceAudioFile.name);
-                const storagePath = `${nuwe.id}/verwysing-${safeName}`;
-                await supabase.storage.from('musiek-liedere').upload(storagePath, referenceAudioFile, { upsert: true });
-                await supabase.from('musiek_liedere').update({ verwysing_oudio_pad: storagePath }).eq('id', nuwe.id);
-                verwysingOudioPadRemote = storagePath;
-            }
+                    // Opdateer rekord met oudio pad en URL
+                    const { error: updateErr } = await supabase
+                        .from('musiek_liedere')
+                        .update({
+                            oudio_pad: storagePath,
+                            oudio_url: pubUrl.publicUrl,
+                            updated_at: new Date().toISOString(),
+                        })
+                        .eq('id', nuwe.id);
+                    if (updateErr) throw updateErr;
 
-            // Stuur na AI vir generasie
-            if (nuwe?.id) {
-                const { error: aiErr } = await supabase.functions.invoke('musiek-ai', {
-                    body: {
-                        type: aiDiens === 'suno' ? 'genereer_suno' : 'genereer_replicate',
-                        data: {
-                            lied_id: nuwe.id,
-                            lirieke: lirieke.trim(),
-                            styl_prompt: finalStyl,
-                            titel: titel.trim(),
-                            tempo,
-                            verwysing_oudio_pad: verwysingOudioPadRemote,
+                    // Laai ook bladmusiek op (opsioneel)
+                    if (file) {
+                        const safeSheetName = sanitizeFileName(file.name);
+                        const sheetPath = `${nuwe.id}/bladmusiek-${safeSheetName}`;
+                        await supabase.storage.from('musiek-liedere').upload(sheetPath, file, { upsert: true });
+                        await supabase.from('musiek_liedere').update({ bladmusiek_pad: sheetPath }).eq('id', nuwe.id);
+                    }
+                }
+
+                toast.success('MP3 suksesvol opgelaai! Jy kan dit nou publiseer.');
+            } else {
+                // === AI GENERASIE (bestaande logika) ===
+                const finalStyl = eieStyl.trim() || stylPrompt;
+
+                // Skep rekord in databasis
+                const { data: nuwe, error: dbErr } = await supabase
+                    .from('musiek_liedere')
+                    .insert({
+                        titel: titel.trim(),
+                        lirieke: lirieke.trim(),
+                        styl_prompt: finalStyl,
+                        tempo,
+                        status: 'konsep',
+                        opgelaai_deur: currentUser?.id,
+                    })
+                    .select('id')
+                    .single();
+                if (dbErr) throw dbErr;
+
+                // Laai bladmusiek-lêer op (opsioneel)
+                if (file && nuwe?.id) {
+                    const safeName = sanitizeFileName(file.name);
+                    const storagePath = `${nuwe.id}/bladmusiek-${safeName}`;
+                    await supabase.storage.from('musiek-liedere').upload(storagePath, file, { upsert: true });
+                    await supabase.from('musiek_liedere').update({ bladmusiek_pad: storagePath }).eq('id', nuwe.id);
+                }
+
+                // Laai verwysings-oudio op (indien gekies)
+                let verwysingOudioPadRemote = null;
+                if (referenceAudioFile && nuwe?.id) {
+                    const safeName = sanitizeFileName(referenceAudioFile.name);
+                    const storagePath = `${nuwe.id}/verwysing-${safeName}`;
+                    await supabase.storage.from('musiek-liedere').upload(storagePath, referenceAudioFile, { upsert: true });
+                    await supabase.from('musiek_liedere').update({ verwysing_oudio_pad: storagePath }).eq('id', nuwe.id);
+                    verwysingOudioPadRemote = storagePath;
+                }
+
+                // Stuur na AI vir generasie
+                if (nuwe?.id) {
+                    const { error: aiErr } = await supabase.functions.invoke('musiek-ai', {
+                        body: {
+                            type: aiDiens === 'suno' ? 'genereer_suno' : 'genereer_replicate',
+                            data: {
+                                lied_id: nuwe.id,
+                                lirieke: lirieke.trim(),
+                                styl_prompt: finalStyl,
+                                titel: titel.trim(),
+                                tempo,
+                                verwysing_oudio_pad: verwysingOudioPadRemote,
+                            },
                         },
-                    },
-                });
-                if (aiErr) throw aiErr;
-                beginPolling(nuwe.id);
-                toast.success('Musiek word gegenereer... Dit kan 1-3 minute neem.');
+                    });
+                    if (aiErr) throw aiErr;
+                    beginPolling(nuwe.id);
+                    toast.success('Musiek word gegenereer... Dit kan 1-3 minute neem.');
+                }
             }
 
             // Herstel vorm
@@ -233,10 +316,13 @@ const MusiekAdmin: React.FC = () => {
         setTempo(80);
         setFile(null);
         setReferenceAudioFile(null);
+        setMp3File(null);
+        setModus('ai');
         setToonVorm(false);
         setRedigeerId(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (referenceAudioInputRef.current) referenceAudioInputRef.current.value = '';
+        if (mp3InputRef.current) mp3InputRef.current.value = '';
     };
 
     const handleRedigeer = (lied: MusiekLied) => {
@@ -244,18 +330,24 @@ const MusiekAdmin: React.FC = () => {
         setTitel(lied.titel);
         setLirieke(lied.lirieke || '');
 
-        // Check if style is in options or custom
-        const knownStyle = STYL_OPSIES.find(s => s.value === lied.styl_prompt);
-        if (knownStyle) {
-            setStylPrompt(lied.styl_prompt || STYL_OPSIES[0].value);
-            setEieStyl('');
+        // Stel modus gebaseer op ai_diens
+        if (lied.ai_diens === 'handmatig') {
+            setModus('handmatig');
         } else {
-            setStylPrompt(STYL_OPSIES[0].value); // Default
-            setEieStyl(lied.styl_prompt || '');
+            setModus('ai');
+            // Check if style is in options or custom
+            const knownStyle = STYL_OPSIES.find(s => s.value === lied.styl_prompt);
+            if (knownStyle) {
+                setStylPrompt(lied.styl_prompt || STYL_OPSIES[0].value);
+                setEieStyl('');
+            } else {
+                setStylPrompt(STYL_OPSIES[0].value); // Default
+                setEieStyl(lied.styl_prompt || '');
+            }
+            setTempo(lied.tempo || 80);
+            setAiDiens((lied.ai_diens as 'suno' | 'replicate') || 'suno');
         }
 
-        setTempo(lied.tempo || 80);
-        setAiDiens((lied.ai_diens as 'suno' | 'replicate') || 'suno'); // Default to existing or suno
         setToonVorm(true);
 
         // Scroll to top
@@ -265,23 +357,25 @@ const MusiekAdmin: React.FC = () => {
     const handleOpdateer = async () => {
         if (!redigeerId) return;
         if (!titel.trim()) { toast.error('Titel is verplig'); return; }
-        if (!lirieke.trim()) { toast.error('Lirieke is verplig'); return; }
+        if (modus === 'ai' && !lirieke.trim()) { toast.error('Lirieke is verplig'); return; }
 
         setUploading(true);
         try {
-            const finalStyl = eieStyl.trim() || stylPrompt;
-
             // Update DB
             const updates: any = {
                 titel: titel.trim(),
-                lirieke: lirieke.trim(),
-                styl_prompt: finalStyl,
-                tempo,
-                ai_diens: aiDiens,
+                lirieke: lirieke.trim() || null,
                 updated_at: new Date().toISOString()
             };
 
-            // Handle new files if uploaded
+            if (modus === 'ai') {
+                const finalStyl = eieStyl.trim() || stylPrompt;
+                updates.styl_prompt = finalStyl;
+                updates.tempo = tempo;
+                updates.ai_diens = aiDiens;
+            }
+
+            // Handle new bladmusiek files if uploaded
             if (file) {
                 const safeName = sanitizeFileName(file.name);
                 const storagePath = `${redigeerId}/bladmusiek-${safeName}`;
@@ -289,7 +383,24 @@ const MusiekAdmin: React.FC = () => {
                 updates.bladmusiek_pad = storagePath;
             }
 
-            if (referenceAudioFile) {
+            // Handle new MP3 file for manual uploads
+            if (mp3File && modus === 'handmatig') {
+                const safeName = sanitizeFileName(mp3File.name);
+                const storagePath = `${redigeerId}/oudio-${safeName}`;
+                const { error: uploadErr } = await supabase.storage
+                    .from('musiek-liedere')
+                    .upload(storagePath, mp3File, { upsert: true });
+                if (uploadErr) throw uploadErr;
+
+                const { data: pubUrl } = supabase.storage
+                    .from('musiek-liedere')
+                    .getPublicUrl(storagePath);
+
+                updates.oudio_pad = storagePath;
+                updates.oudio_url = pubUrl.publicUrl;
+            }
+
+            if (referenceAudioFile && modus === 'ai') {
                 const safeName = sanitizeFileName(referenceAudioFile.name);
                 const storagePath = `${redigeerId}/verwysing-${safeName}`;
                 await supabase.storage.from('musiek-liedere').upload(storagePath, referenceAudioFile, { upsert: true });
@@ -303,7 +414,9 @@ const MusiekAdmin: React.FC = () => {
 
             if (error) throw error;
 
-            toast.success('Lied opgedateer! Klik "Hergenereer" as jy nuwe musiek wil maak.');
+            toast.success(modus === 'handmatig'
+                ? 'Lied opgedateer!'
+                : 'Lied opgedateer! Klik "Hergenereer" as jy nuwe musiek wil maak.');
             resetVorm();
             haalLiedere();
 
@@ -407,6 +520,8 @@ const MusiekAdmin: React.FC = () => {
         }
     };
 
+    const isHandmatig = (lied: MusiekLied) => lied.ai_diens === 'handmatig';
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -437,11 +552,51 @@ const MusiekAdmin: React.FC = () => {
                         <CardTitle className="text-[#002855]">{redigeerId ? 'Lied Redigeer' : 'Nuwe Lied Skep'}</CardTitle>
                         <CardDescription>
                             {redigeerId
-                                ? 'Pas die lied se inligting aan. (Klik "Hergenereer" op die lys na jy gestoor het om nuwe oudio te maak)'
-                                : 'Laai bladmusiek op, voeg lirieke by, en laat AI musiek genereer.'}
+                                ? 'Pas die lied se inligting aan.'
+                                : 'Kies of jy musiek met AI wil genereer of \u2019n bestaande MP3 wil oplaai.'}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+
+                        {/* === Modus Skakelaar === */}
+                        {!redigeerId && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Hoe wil jy die lied byvoeg?
+                                </label>
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setModus('ai')}
+                                        className={`flex-1 p-4 rounded-xl border-2 text-left transition-all ${modus === 'ai'
+                                            ? 'border-[#002855] bg-[#002855]/5 shadow-md'
+                                            : 'border-gray-200 hover:border-gray-300'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Wand2 className="w-4 h-4 text-[#002855]" />
+                                            <p className="font-semibold text-sm text-[#002855]">AI Genereer</p>
+                                        </div>
+                                        <p className="text-xs text-gray-500">Voer lirieke in en laat AI musiek skep</p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setModus('handmatig')}
+                                        className={`flex-1 p-4 rounded-xl border-2 text-left transition-all ${modus === 'handmatig'
+                                            ? 'border-emerald-600 bg-emerald-50 shadow-md'
+                                            : 'border-gray-200 hover:border-gray-300'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <FileAudio className="w-4 h-4 text-emerald-600" />
+                                            <p className="font-semibold text-sm text-emerald-700">Eie MP3 Oplaai</p>
+                                        </div>
+                                        <p className="text-xs text-gray-500">Laai 'n bestaande MP3-lêer direk op</p>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Titel */}
                         <div>
                             <label htmlFor="musiek-titel" className="block text-sm font-medium text-gray-700 mb-1">
@@ -457,7 +612,42 @@ const MusiekAdmin: React.FC = () => {
                             />
                         </div>
 
-                        {/* Bladmusiek Oplaai (Opsioneel) */}
+                        {/* === HANDMATIGE MODUS: MP3 Oplaai === */}
+                        {modus === 'handmatig' && (
+                            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                                <label className="block text-sm font-medium text-emerald-900 mb-1">
+                                    MP3-Lêer *
+                                </label>
+                                <p className="text-xs text-emerald-700 mb-3">
+                                    Kies die MP3-lêer wat jy wil oplaai. Dit sal direk beskikbaar wees om te publiseer.
+                                </p>
+                                <input
+                                    ref={mp3InputRef}
+                                    type="file"
+                                    accept=".mp3,audio/mpeg"
+                                    onChange={handleMp3Kies}
+                                    className="hidden"
+                                />
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => mp3InputRef.current?.click()}
+                                        className="text-emerald-900 border-emerald-300 hover:bg-emerald-100"
+                                    >
+                                        <Upload className="w-4 h-4 mr-2" />
+                                        Kies MP3
+                                    </Button>
+                                    {mp3File && (
+                                        <span className="text-sm text-emerald-800 flex items-center gap-1">
+                                            <FileAudio className="w-4 h-4" />
+                                            {mp3File.name}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Bladmusiek Oplaai (Opsioneel - albei modusse) */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Bladmusiek (Opsioneel — PPT, PPTX of PDF)
@@ -487,147 +677,162 @@ const MusiekAdmin: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Verwysing Oudio Oplaai (Opsioneel) */}
-                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                            <label className="block text-sm font-medium text-amber-900 mb-1">
-                                Melodie Gids (Opsioneel — MP3, WAV, M4A)
-                            </label>
-                            <p className="text-xs text-amber-700 mb-3">
-                                Laai 'n opname op van hoe die lied moet klink (bv. iemand wat sing of speel).
-                                Die AI sal hierdie melodie probeer behou maar die styl verander.
-                            </p>
-                            <input
-                                ref={referenceAudioInputRef}
-                                type="file"
-                                accept="audio/*"
-                                onChange={handleReferenceAudioKies}
-                                className="hidden"
-                            />
-                            <div className="flex items-center gap-3">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => referenceAudioInputRef.current?.click()}
-                                    className="text-amber-900 border-amber-300 hover:bg-amber-100"
-                                >
-                                    <Upload className="w-4 h-4 mr-2" />
-                                    Kies Oudio
-                                </Button>
-                                {referenceAudioFile && (
-                                    <span className="text-sm text-amber-800 flex items-center gap-1">
-                                        <Volume2 className="w-4 h-4" />
-                                        {referenceAudioFile.name}
-                                    </span>
-                                )}
+                        {/* === AI MODUS: Verwysing Oudio === */}
+                        {modus === 'ai' && (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                <label className="block text-sm font-medium text-amber-900 mb-1">
+                                    Melodie Gids (Opsioneel — MP3, WAV, M4A)
+                                </label>
+                                <p className="text-xs text-amber-700 mb-3">
+                                    Laai 'n opname op van hoe die lied moet klink (bv. iemand wat sing of speel).
+                                    Die AI sal hierdie melodie probeer behou maar die styl verander.
+                                </p>
+                                <input
+                                    ref={referenceAudioInputRef}
+                                    type="file"
+                                    accept="audio/*"
+                                    onChange={handleReferenceAudioKies}
+                                    className="hidden"
+                                />
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => referenceAudioInputRef.current?.click()}
+                                        className="text-amber-900 border-amber-300 hover:bg-amber-100"
+                                    >
+                                        <Upload className="w-4 h-4 mr-2" />
+                                        Kies Oudio
+                                    </Button>
+                                    {referenceAudioFile && (
+                                        <span className="text-sm text-amber-800 flex items-center gap-1">
+                                            <Volume2 className="w-4 h-4" />
+                                            {referenceAudioFile.name}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Lirieke */}
                         <div>
                             <label htmlFor="musiek-lirieke" className="block text-sm font-medium text-gray-700 mb-1">
-                                Lirieke *
+                                Lirieke {modus === 'ai' ? '*' : '(Opsioneel)'}
                             </label>
                             <textarea
                                 id="musiek-lirieke"
                                 value={lirieke}
                                 onChange={(e) => setLirieke(e.target.value)}
-                                placeholder={"Die Here is my Herder,\nNiks sal my ontbreek nie.\nHy laat my neerle in groen weivelde;\nHy lei my na waters waar dit stil is."}
-                                rows={8}
+                                placeholder={modus === 'handmatig'
+                                    ? 'Voeg opsioneel lirieke by sodat gebruikers dit kan sien terwyl hulle luister...'
+                                    : "Die Here is my Herder,\nNiks sal my ontbreek nie.\nHy laat my neerle in groen weivelde;\nHy lei my na waters waar dit stil is."}
+                                rows={modus === 'handmatig' ? 5 : 8}
                                 className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#002855] focus:border-[#002855] outline-none resize-y font-mono text-sm"
                             />
                         </div>
 
-                        {/* Styl */}
-                        <div>
-                            <label htmlFor="musiek-styl" className="block text-sm font-medium text-gray-700 mb-1">
-                                Musiekstyl
-                            </label>
-                            <select
-                                id="musiek-styl"
-                                value={stylPrompt}
-                                onChange={(e) => setStylPrompt(e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#002855] focus:border-[#002855] outline-none"
-                            >
-                                {STYL_OPSIES.map((s) => (
-                                    <option key={s.value} value={s.value}>{s.label}</option>
-                                ))}
-                            </select>
-                            <div className="mt-2">
-                                <input
-                                    type="text"
-                                    value={eieStyl}
-                                    onChange={(e) => setEieStyl(e.target.value)}
-                                    placeholder="Of tik jou eie styl-beskrywing hier (bv. 'Statige orrelmusiek, koor, 4-stemmig')"
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 focus:ring-2 focus:ring-[#002855] focus:border-[#002855] outline-none text-sm"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">As jy hier iets invul, word die keuse bo geïgnoreer.</p>
-                            </div>
-                        </div>
+                        {/* === AI MODUS: Styl, Tempo, AI Diens === */}
+                        {modus === 'ai' && (
+                            <>
+                                {/* Styl */}
+                                <div>
+                                    <label htmlFor="musiek-styl" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Musiekstyl
+                                    </label>
+                                    <select
+                                        id="musiek-styl"
+                                        value={stylPrompt}
+                                        onChange={(e) => setStylPrompt(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#002855] focus:border-[#002855] outline-none"
+                                    >
+                                        {STYL_OPSIES.map((s) => (
+                                            <option key={s.value} value={s.value}>{s.label}</option>
+                                        ))}
+                                    </select>
+                                    <div className="mt-2">
+                                        <input
+                                            type="text"
+                                            value={eieStyl}
+                                            onChange={(e) => setEieStyl(e.target.value)}
+                                            placeholder="Of tik jou eie styl-beskrywing hier (bv. 'Statige orrelmusiek, koor, 4-stemmig')"
+                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 focus:ring-2 focus:ring-[#002855] focus:border-[#002855] outline-none text-sm"
+                                        />
+                                        <p className="text-xs text-gray-400 mt-1">As jy hier iets invul, word die keuse bo geïgnoreer.</p>
+                                    </div>
+                                </div>
 
-                        {/* Tempo */}
-                        <div>
-                            <label htmlFor="musiek-tempo" className="block text-sm font-medium text-gray-700 mb-1">
-                                Tempo: {tempo} BPM
-                            </label>
-                            <input
-                                id="musiek-tempo"
-                                type="range"
-                                min={40}
-                                max={180}
-                                value={tempo}
-                                onChange={(e) => setTempo(parseInt(e.target.value))}
-                                className="w-full accent-[#002855]"
-                            />
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Stadig (40)</span>
-                                <span>Matig (90)</span>
-                                <span>Vinnig (180)</span>
-                            </div>
-                        </div>
+                                {/* Tempo */}
+                                <div>
+                                    <label htmlFor="musiek-tempo" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Tempo: {tempo} BPM
+                                    </label>
+                                    <input
+                                        id="musiek-tempo"
+                                        type="range"
+                                        min={40}
+                                        max={180}
+                                        value={tempo}
+                                        onChange={(e) => setTempo(parseInt(e.target.value))}
+                                        className="w-full accent-[#002855]"
+                                    />
+                                    <div className="flex justify-between text-xs text-gray-400">
+                                        <span>Stadig (40)</span>
+                                        <span>Matig (90)</span>
+                                        <span>Vinnig (180)</span>
+                                    </div>
+                                </div>
 
-                        {/* AI Diens */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                AI Diens
-                            </label>
-                            <div className="flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setAiDiens('suno')}
-                                    className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${aiDiens === 'suno'
-                                        ? 'border-[#002855] bg-[#002855]/5'
-                                        : 'border-gray-200 hover:border-gray-300'
-                                        }`}
-                                >
-                                    <p className="font-medium text-sm">Suno</p>
-                                    <p className="text-xs text-gray-500 mt-0.5">Beste vir liedere met lirieke</p>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setAiDiens('replicate')}
-                                    className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${aiDiens === 'replicate'
-                                        ? 'border-[#002855] bg-[#002855]/5'
-                                        : 'border-gray-200 hover:border-gray-300'
-                                        }`}
-                                >
-                                    <p className="font-medium text-sm">MusicGen (Replicate)</p>
-                                    <p className="text-xs text-gray-500 mt-0.5">Beter melodie-behoud</p>
-                                </button>
-                            </div>
-                        </div>
+                                {/* AI Diens */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        AI Diens
+                                    </label>
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setAiDiens('suno')}
+                                            className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${aiDiens === 'suno'
+                                                ? 'border-[#002855] bg-[#002855]/5'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            <p className="font-medium text-sm">Suno</p>
+                                            <p className="text-xs text-gray-500 mt-0.5">Beste vir liedere met lirieke</p>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAiDiens('replicate')}
+                                            className={`flex-1 p-3 rounded-xl border-2 text-left transition-all ${aiDiens === 'replicate'
+                                                ? 'border-[#002855] bg-[#002855]/5'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            <p className="font-medium text-sm">MusicGen (Replicate)</p>
+                                            <p className="text-xs text-gray-500 mt-0.5">Beter melodie-behoud</p>
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         {/* Aksie-knoppies */}
                         <div className="flex gap-3 pt-2">
                             <Button
                                 onClick={redigeerId ? handleOpdateer : handleSkep}
-                                disabled={uploading || !titel.trim() || !lirieke.trim()}
-                                className="bg-[#002855] hover:bg-[#001a35] flex-1"
+                                disabled={uploading || !titel.trim() || (modus === 'ai' && !lirieke.trim()) || (modus === 'handmatig' && !mp3File && !redigeerId)}
+                                className={`flex-1 ${modus === 'handmatig' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#002855] hover:bg-[#001a35]'}`}
                             >
                                 {uploading ? (
                                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                ) : modus === 'handmatig' ? (
+                                    <Upload className="w-4 h-4 mr-2" />
                                 ) : (
                                     <Sparkles className="w-4 h-4 mr-2" />
                                 )}
-                                {redigeerId ? 'Stoor Veranderinge' : 'Genereer Musiek'}
+                                {redigeerId
+                                    ? 'Stoor Veranderinge'
+                                    : modus === 'handmatig'
+                                        ? 'Laai MP3 Op'
+                                        : 'Genereer Musiek'}
                             </Button>
                             <Button
                                 variant="outline"
@@ -700,8 +905,8 @@ const MusiekAdmin: React.FC = () => {
                                                         {getStatusLabel(lied.status)}
                                                     </span>
                                                     {lied.ai_diens && (
-                                                        <span className="text-xs text-gray-400">
-                                                            {lied.ai_diens === 'suno' ? 'Suno' : 'MusicGen'}
+                                                        <span className={`text-xs ${lied.ai_diens === 'handmatig' ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>
+                                                            {lied.ai_diens === 'suno' ? 'Suno' : lied.ai_diens === 'handmatig' ? '📁 Handmatig' : 'MusicGen'}
                                                         </span>
                                                     )}
                                                     {lied.tempo && (
@@ -744,7 +949,7 @@ const MusiekAdmin: React.FC = () => {
                                                     Onpubliseer
                                                 </Button>
                                             )}
-                                            {(lied.status === 'gereed' || lied.status === 'fout' || lied.status === 'gepubliseer') && (
+                                            {!isHandmatig(lied) && (lied.status === 'gereed' || lied.status === 'fout' || lied.status === 'gepubliseer') && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
