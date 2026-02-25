@@ -203,6 +203,58 @@ CRITICAL: fase3_verdieping, fase4_verhouding and fase5_afsluiting must have RICH
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
+        // ========== SUMMARIZE LESSON (child-friendly summary for 12-18) ==========
+        if (type === 'summarize_lesson') {
+            const lessonContent = data.lesInhoud || data.context || context || "";
+            const lessonTitle = data.lesTitel || data.lessonTitle || "Les";
+
+            const sysPrompt = lang === 'af'
+                ? `Jy is 'n ervare kategese-onderwyser wat lesinhoud vir hoërskool leerders (12-18 jaar) opsom.
+
+TAAK: Lees die lesinhoud hieronder en skryf 'n kort, duidelike samevatting wat maklik is om te verstaan.
+
+REËLS:
+- Gebruik eenvoudige, duidelike Afrikaans wat tieners kan verstaan.
+- GEEN sleng of informele uitdrukkings soos "OG", "awesome", "cool", "lekker", "gaaf", "dope", "vibe", "lit", "bro" of enige ander sleng NIE.
+- Skryf in 'n vriendelike maar respekvolle toon — soos 'n goeie onderwyser wat met leerders praat.
+- Hou die samevatting kort: maksimum 150-200 woorde.
+- Begin met 'n kort inleiding (1-2 sinne) wat sê waaroor die les gaan.
+- Lys dan die 3-5 belangrikste punte met •-punte.
+- Sluit af met een sin wat die kernboodskap opsom.
+- As daar Bybelverse in die les is, noem die belangrikste een of twee.
+- Moenie inligting byvoeg wat nie in die oorspronklike les is nie.
+
+Antwoord SLEGS met die samevatting. Geen opskrifte soos "Samevatting:" nie. Begin net met die inhoud.`
+                : `You are an experienced catechism teacher summarising lesson content for high school learners (12-18 years).
+
+TASK: Read the lesson content below and write a short, clear summary that is easy to understand.
+
+RULES:
+- Use simple, clear English that teenagers can understand.
+- NO slang or informal expressions such as "OG", "awesome", "cool", "lit", "vibe", "dope", "bro" or any other slang.
+- Write in a friendly but respectful tone — like a good teacher talking to students.
+- Keep the summary short: maximum 150-200 words.
+- Start with a brief introduction (1-2 sentences) explaining what the lesson is about.
+- Then list the 3-5 most important points with • bullet points.
+- End with one sentence summarising the core message.
+- If there are Bible verses in the lesson, mention the most important one or two.
+- Do not add information that is not in the original lesson.
+
+Reply ONLY with the summary. No headings like "Summary:". Just start with the content.`;
+
+            const userContent = `Les titel: ${lessonTitle}\n\nLesinhoud:\n${lessonContent.substring(0, 5000)}`;
+
+            const reply = await callGemini(GEMINI_API_KEY, sysPrompt, userContent, {
+                temperature: 0.4
+            });
+
+            return new Response(JSON.stringify({
+                success: true,
+                data: { summary: (reply || "").trim() },
+                v: "6.1.0"
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
         // ========== PROMPTS (unique, SKAV-structured for 12-17) ==========
         if (type === 'prompts') {
             const promptCount = data.promptCount || 0;

@@ -522,6 +522,11 @@ const Geloofsonderrig: React.FC = () => {
   const [versesLoading, setVersesLoading] = useState(false);
   const [lessonVerses, setLessonVerses] = useState<{ reference: string, text: string }[]>([]);
 
+  // Lesson Summary State
+  const [lesSamevatting, setLesSamevatting] = useState<string | null>(null);
+  const [samevattingLoading, setSamevattingLoading] = useState(false);
+  const [showOriginalContent, setShowOriginalContent] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [loadingLeerders, setLoadingLeerders] = useState(false);
   const [showCreateKlas, setShowCreateKlas] = useState(false);
@@ -608,6 +613,25 @@ const Geloofsonderrig: React.FC = () => {
       setCurrentVraagIndex(0);
       setAntwoorde({});
       setKiTerugvoer({});
+      // Auto-generate lesson summary
+      setLesSamevatting(null);
+      setShowOriginalContent(false);
+      if (selectedLes.inhoud && selectedLes.inhoud !== 'File Uploaded' && selectedLes.inhoud.length > 100) {
+        setSamevattingLoading(true);
+        invokeAIWithRetry('summarize_lesson', {
+          lesInhoud: selectedLes.inhoud,
+          lesTitel: selectedLes.titel,
+          language
+        }).then(result => {
+          if (result?.success && result?.data?.summary) {
+            setLesSamevatting(result.data.summary);
+          }
+        }).catch(err => {
+          console.error('Summary generation failed:', err);
+        }).finally(() => {
+          setSamevattingLoading(false);
+        });
+      }
     }
   }, [selectedLes]);
 
@@ -669,6 +693,16 @@ const Geloofsonderrig: React.FC = () => {
             poemText: data.poemText,
             lesInhoud: data.lesInhoud,
             lesTitel: data.lesTitel
+          };
+        } else if (action === 'summarize_lesson') {
+          body = {
+            ...body,
+            type: 'summarize_lesson',
+            data: {
+              lesInhoud: data.lesInhoud,
+              lesTitel: data.lesTitel,
+              language: data.language || language
+            }
           };
         } else {
           // Default: lesson_chat
@@ -2358,41 +2392,84 @@ const Geloofsonderrig: React.FC = () => {
 
         <Card>
           <CardContent className="p-6">
-            {/* NEW: Scrollable Content Wrapper - HEIGHT REDUCED */}
-            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 max-h-[500px] overflow-y-auto shadow-inner custom-scrollbar">
-              {selectedLes.file_url ? (
-                <div className="space-y-4 mb-4">
-                  <div className="flex items-center gap-4 p-4 bg-white rounded-lg border border-blue-200">
-                    <FileText className="w-12 h-12 text-blue-500" />
-                    <div className="flex-1">
-                      <h3 className="font-bold text-blue-900">{selectedLes.titel}</h3>
-                      <p className="text-sm text-blue-700">{selectedLes.file_name || 'Lêer'}</p>
+            {/* AI Summary Section */}
+            {samevattingLoading && (
+              <div className="flex items-center gap-3 p-4 mb-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-200 animate-pulse">
+                <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
+                <span className="text-sm font-medium text-purple-700">
+                  {language === 'af' ? 'KI skep tans \'n samevatting van die les vir jou...' : 'AI is creating a lesson summary for you...'}
+                </span>
+              </div>
+            )}
+
+            {lesSamevatting && !samevattingLoading && (
+              <div className="mb-4 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 rounded-xl border-2 border-emerald-200 shadow-md overflow-hidden">
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-white" />
                     </div>
-                    <Button asChild variant="outline">
-                      <a href={selectedLes.file_url} target="_blank" rel="noopener noreferrer">
-                        <Download className="w-4 h-4 mr-2" /> Laai Af
-                      </a>
-                    </Button>
+                    <h4 className="font-bold text-emerald-900 text-sm">
+                      {language === 'af' ? 'Kort Oorsig van die Les' : 'Lesson Summary'}
+                    </h4>
                   </div>
-                  {selectedLes.inhoud && selectedLes.inhoud !== 'File Uploaded' && (
-                    <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
-                      {selectedLes.inhoud}
-                    </div>
-                  )}
+                  <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    {lesSamevatting}
+                  </div>
                 </div>
-              ) : (
-                <>
-                  {/<([a-z][a-z0-9]*)\b[^>]*>/i.test(selectedLes.inhoud) ? (
-                    <div
-                      className="prose prose-sm max-w-none text-gray-700 [&_img]:rounded-lg [&_img]:my-4"
-                      dangerouslySetInnerHTML={{ __html: selectedLes.inhoud }}
-                    />
-                  ) : (
-                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{selectedLes.inhoud}</p>
-                  )}
-                </>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Toggle button for original content */}
+            {(lesSamevatting || samevattingLoading) && (
+              <button
+                onClick={() => setShowOriginalContent(!showOriginalContent)}
+                className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <ChevronRight className={`w-4 h-4 transition-transform ${showOriginalContent ? 'rotate-90' : ''}`} />
+                {language === 'af'
+                  ? (showOriginalContent ? 'Verberg oorspronklike lesteks' : 'Wys oorspronklike lesteks')
+                  : (showOriginalContent ? 'Hide original lesson text' : 'Show original lesson text')}
+              </button>
+            )}
+
+            {/* Original Content - shown by default if no summary, or via toggle */}
+            {(!lesSamevatting && !samevattingLoading || showOriginalContent) && (
+              <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 max-h-[500px] overflow-y-auto shadow-inner custom-scrollbar">
+                {selectedLes.file_url ? (
+                  <div className="space-y-4 mb-4">
+                    <div className="flex items-center gap-4 p-4 bg-white rounded-lg border border-blue-200">
+                      <FileText className="w-12 h-12 text-blue-500" />
+                      <div className="flex-1">
+                        <h3 className="font-bold text-blue-900">{selectedLes.titel}</h3>
+                        <p className="text-sm text-blue-700">{selectedLes.file_name || 'L\u00eaer'}</p>
+                      </div>
+                      <Button asChild variant="outline">
+                        <a href={selectedLes.file_url} target="_blank" rel="noopener noreferrer">
+                          <Download className="w-4 h-4 mr-2" /> Laai Af
+                        </a>
+                      </Button>
+                    </div>
+                    {selectedLes.inhoud && selectedLes.inhoud !== 'File Uploaded' && (
+                      <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
+                        {selectedLes.inhoud}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/<([a-z][a-z0-9]*)\b[^>]*>/i.test(selectedLes.inhoud) ? (
+                      <div
+                        className="prose prose-sm max-w-none text-gray-700 [&_img]:rounded-lg [&_img]:my-4"
+                        dangerouslySetInnerHTML={{ __html: selectedLes.inhoud }}
+                      />
+                    ) : (
+                      <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{selectedLes.inhoud}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {selectedLes.skrifverwysing && (
               <div className="mt-4 p-4 bg-blue-50 rounded-lg">
