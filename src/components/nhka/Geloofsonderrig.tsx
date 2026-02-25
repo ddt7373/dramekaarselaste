@@ -686,14 +686,30 @@ const Geloofsonderrig: React.FC = () => {
             language: data.language
           };
         } else if (action === 'generate_music') {
-          body = {
-            ...body,
-            type: 'generate_music',
-            poem: data.poem,
-            poemText: data.poemText,
-            lesInhoud: data.lesInhoud,
-            lesTitel: data.lesTitel
-          };
+          // Roep musiek-ai vir Suno generasie
+          const { data: result, error } = await supabase.functions.invoke('musiek-ai', {
+            body: {
+              type: 'genereer_suno',
+              data: {
+                lied_id: data.lied_id,
+                lirieke: data.poem || data.poemText || '',
+                styl_prompt: 'Gospel, Inspirational, Acoustic, Gentle',
+                titel: (data.lesTitel || 'Geloofsgedig').substring(0, 80)
+              }
+            }
+          });
+          if (error) throw error;
+          return result;
+        } else if (action === 'check_music_status') {
+          // Poll musiek-ai vir status
+          const { data: result, error } = await supabase.functions.invoke('musiek-ai', {
+            body: {
+              type: 'kyk_status',
+              data: { lied_id: data.lied_id }
+            }
+          });
+          if (error) throw error;
+          return result;
         } else if (action === 'summarize_lesson') {
           body = {
             ...body,
@@ -3451,6 +3467,7 @@ const CompletionVideoPlayer = ({
   const [generatingPoem, setGeneratingPoem] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [generatingMusic, setGeneratingMusic] = useState(false);
+  const [musicStatus, setMusicStatus] = useState<string>('');
 
   // Auto-advance
   useEffect(() => {
@@ -3611,22 +3628,67 @@ const CompletionVideoPlayer = ({
                           onClick={async () => {
                             if (!onInvokeAI || !poem) return;
                             setGeneratingMusic(true);
+                            setMusicStatus(language === 'af' ? 'Begin musiek genereer...' : 'Starting music generation...');
                             try {
-                              const result = await onInvokeAI('generate_music', { poem, lesInhoud: lessonContent, lesTitel: lessonTitle });
-                              if (result?.success && result?.data?.audioUrl) {
-                                setAudioUrl(result.data.audioUrl);
-                                onAwardPunte?.('musiek', 5, lesId);
-                                toast({ title: language === 'af' ? 'Liedjie geskep! +5 punte!' : 'Song created! +5 points!' });
-                              } else throw new Error(result?.error || 'Failed');
+                              // 1. Skep 'n tydelike rekord in musiek_liedere
+                              const { data: liedData, error: insertErr } = await supabase
+                                .from('musiek_liedere')
+                                .insert({
+                                  titel: (lessonTitle || 'Geloofsgedig').substring(0, 80),
+                                  lirieke: poem.substring(0, 3000),
+                                  styl_prompt: 'Gospel, Inspirational, Acoustic, Gentle',
+                                  status: 'konsep',
+                                  ai_diens: 'suno'
+                                })
+                                .select('id')
+                                .single();
+                              if (insertErr || !liedData?.id) throw new Error(insertErr?.message || 'Kon nie lied skep nie');
+                              const liedId = liedData.id;
+
+                              // 2. Roep musiek-ai om Suno te begin
+                              setMusicStatus(language === 'af' ? 'Stuur na Suno AI...' : 'Sending to Suno AI...');
+                              const genResult = await onInvokeAI('generate_music', {
+                                lied_id: liedId,
+                                poem,
+                                lesTitel: lessonTitle
+                              });
+                              if (!genResult?.success) throw new Error(genResult?.error || 'Suno versoek het gefaal');
+
+                              // 3. Poll vir status elke 5 sekondes (max 24 keer = 2 minute)
+                              setMusicStatus(language === 'af' ? 'Suno genereer musiek... dit neem omtrent 1-2 minute.' : 'Suno is generating music... this takes about 1-2 minutes.');
+                              for (let i = 0; i < 24; i++) {
+                                await new Promise(r => setTimeout(r, 5000));
+                                try {
+                                  const statusResult = await onInvokeAI('check_music_status', { lied_id: liedId });
+                                  if (statusResult?.status === 'gereed' && statusResult?.oudio_url) {
+                                    setAudioUrl(statusResult.oudio_url);
+                                    onAwardPunte?.('musiek', 5, lesId);
+                                    toast({ title: language === 'af' ? 'Liedjie geskep! +5 punte!' : 'Song created! +5 points!' });
+                                    setMusicStatus('');
+                                    setGeneratingMusic(false);
+                                    return;
+                                  }
+                                  if (statusResult?.status === 'fout') {
+                                    throw new Error(statusResult?.fout || 'Musiek generasie het gefaal');
+                                  }
+                                  setMusicStatus(language === 'af' ? `Suno werk nog... (${i + 1}/24)` : `Suno still working... (${i + 1}/24)`);
+                                } catch (pollErr: any) {
+                                  if (pollErr?.message?.includes('gefaal') || pollErr?.message?.includes('fout')) throw pollErr;
+                                  // Ander poll foute - probeer weer
+                                }
+                              }
+                              throw new Error(language === 'af' ? 'Musiek generasie het te lank geneem. Probeer later weer.' : 'Music generation timed out. Try again later.');
                             } catch (e: any) {
-                              toast({ title: language === 'af' ? 'Kon nie musiek genereer nie' : 'Could not generate music', variant: 'destructive' });
+                              console.error('Music generation error:', e);
+                              toast({ title: language === 'af' ? 'Kon nie musiek genereer nie' : 'Could not generate music', description: e?.message, variant: 'destructive' });
                             } finally {
                               setGeneratingMusic(false);
+                              setMusicStatus('');
                             }
                           }}
                         >
                           {generatingMusic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                          {generatingMusic ? (language === 'af' ? 'Genereer Musiek...' : 'Generating Music...') : (language === 'af' ? 'Stel tot Musiek (Suno)' : 'Set to Music (Suno)')}
+                          {generatingMusic ? (musicStatus || (language === 'af' ? 'Genereer Musiek...' : 'Generating Music...')) : (language === 'af' ? 'Stel tot Musiek (Suno)' : 'Set to Music (Suno)')}
                         </Button>
                       </div>
 
