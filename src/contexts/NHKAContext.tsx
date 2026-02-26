@@ -569,19 +569,23 @@ export const NHKAProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Special login for hoof_admin - they don't need to select a gemeente
+  // Special login for hoof_admin or sub_admin - they don't need to select a gemeente
   const loginAsHoofAdmin = async (epos: string, wagwoord: string) => {
     try {
-      // Find hoof_admin user by email
+      // Find hoof_admin or sub_admin user by email
       const { data, error } = await supabase
         .from('gebruikers')
         .select('*')
         .eq('epos', epos)
-        .eq('rol', 'hoof_admin')
+        .in('rol', ['hoof_admin', 'sub_admin'])
         .single();
 
       if (error || !data) {
         return { success: false, error: 'Ongeldige e-pos of wagwoord' };
+      }
+
+      if (!data.aktief) {
+        return { success: false, error: 'Hierdie rekening is gedeaktiveer' };
       }
 
       // Verify password (simple hash for demo)

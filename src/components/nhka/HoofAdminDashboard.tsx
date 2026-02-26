@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNHKA } from '@/contexts/NHKAContext';
-import { getRolLabel, Gebruiker, GemeenteStats, UserRole, GeloofsonderrigOnderwerp, GeloofsonderrigLes, Graad } from '@/types/nhka';
+import { getRolLabel, Gebruiker, GemeenteStats, UserRole, GeloofsonderrigOnderwerp, GeloofsonderrigLes, Graad, AdminPermission, ADMIN_PERMISSION_LABELS, ALL_ADMIN_PERMISSIONS, hasAdminPermission, isSubAdmin } from '@/types/nhka';
 import {
   LayoutDashboard,
   Church,
@@ -38,7 +38,8 @@ import {
   FileText,
   MessageCircle,
   RefreshCw,
-  Music
+  Music,
+  UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -80,6 +81,17 @@ interface Moderator {
   epos?: string;
   selfoon?: string;
   aktief: boolean;
+  created_at: string;
+}
+
+interface SubAdminRow {
+  id: string;
+  naam: string;
+  van: string;
+  epos?: string;
+  selfoon?: string;
+  aktief: boolean;
+  admin_permissions?: AdminPermission[];
   created_at: string;
 }
 
@@ -305,6 +317,23 @@ const HoofAdminDashboard: React.FC = () => {
   const [showGeloofsonderrigLeaderboard, setShowGeloofsonderrigLeaderboard] = useState(false);
   const [refreshTransaksieKey, setRefreshTransaksieKey] = useState(0);
   const [refreshLeaderboardKey, setRefreshLeaderboardKey] = useState(0);
+
+  // Sub-Admin management state
+  const [showAddSubAdmin, setShowAddSubAdmin] = useState(false);
+  const [addingSubAdmin, setAddingSubAdmin] = useState(false);
+  const [subAdmins, setSubAdmins] = useState<SubAdminRow[]>([]);
+  const [loadingSubAdmins, setLoadingSubAdmins] = useState(false);
+  const [newSubAdmin, setNewSubAdmin] = useState({
+    naam: '',
+    van: '',
+    epos: '',
+    selfoon: '',
+    wagwoord: '',
+    wagwoord_bevestig: '',
+    permissions: [] as AdminPermission[]
+  });
+  const [editingSubAdmin, setEditingSubAdmin] = useState<SubAdminRow | null>(null);
+  const [editSubAdminPermissions, setEditSubAdminPermissions] = useState<AdminPermission[]>([]);
 
   // Moderator management state
   const [showAddModerator, setShowAddModerator] = useState(false);
@@ -771,6 +800,7 @@ const HoofAdminDashboard: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       loadModerators();
+      loadSubAdmins();
     }
   }, [currentUser]);
 
@@ -790,6 +820,134 @@ const HoofAdminDashboard: React.FC = () => {
     }
     setLoadingModerators(false);
   };
+
+  const loadSubAdmins = async () => {
+    setLoadingSubAdmins(true);
+    try {
+      const { data, error } = await supabase
+        .from('gebruikers')
+        .select('id, naam, van, epos, selfoon, aktief, admin_permissions, created_at')
+        .eq('rol', 'sub_admin')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSubAdmins(data || []);
+    } catch (error) {
+      console.error('Error loading sub-admins:', error);
+    }
+    setLoadingSubAdmins(false);
+  };
+
+  const handleAddSubAdmin = async () => {
+    if (!newSubAdmin.naam || !newSubAdmin.van || !newSubAdmin.epos || !newSubAdmin.wagwoord) {
+      toast.error('Vul asb alle verpligte velde in');
+      return;
+    }
+    if (newSubAdmin.wagwoord !== newSubAdmin.wagwoord_bevestig) {
+      toast.error('Wagwoorde stem nie ooreen nie');
+      return;
+    }
+    if (newSubAdmin.wagwoord.length < 6) {
+      toast.error('Wagwoord moet ten minste 6 karakters wees');
+      return;
+    }
+    if (newSubAdmin.permissions.length === 0) {
+      toast.error('Kies ten minste een toestemming');
+      return;
+    }
+
+    setAddingSubAdmin(true);
+    try {
+      const { error } = await supabase
+        .from('gebruikers')
+        .insert([{
+          naam: newSubAdmin.naam,
+          van: newSubAdmin.van,
+          epos: newSubAdmin.epos,
+          selfoon: newSubAdmin.selfoon || null,
+          wagwoord_hash: btoa(newSubAdmin.wagwoord),
+          rol: 'sub_admin',
+          admin_permissions: newSubAdmin.permissions,
+          aktief: true,
+          gemeente_id: null
+        }]);
+
+      if (error) throw error;
+
+      toast.success('Sub-Administrateur suksesvol bygevoeg');
+      setShowAddSubAdmin(false);
+      setNewSubAdmin({
+        naam: '', van: '', epos: '', selfoon: '',
+        wagwoord: '', wagwoord_bevestig: '',
+        permissions: []
+      });
+      await loadSubAdmins();
+    } catch (error: any) {
+      console.error('Error adding sub-admin:', error);
+      toast.error(error.message || 'Kon nie sub-admin byvoeg nie');
+    }
+    setAddingSubAdmin(false);
+  };
+
+  const handleToggleSubAdminStatus = async (subAdmin: SubAdminRow) => {
+    try {
+      const { error } = await supabase
+        .from('gebruikers')
+        .update({ aktief: !subAdmin.aktief })
+        .eq('id', subAdmin.id);
+
+      if (error) throw error;
+      toast.success(`Sub-Admin ${subAdmin.aktief ? 'gedeaktiveer' : 'geaktiveer'}`);
+      await loadSubAdmins();
+    } catch (error: any) {
+      toast.error(error.message || 'Fout met statusverandering');
+    }
+  };
+
+  const handleDeleteSubAdmin = async (subAdmin: SubAdminRow) => {
+    if (!window.confirm(`Is jy seker jy wil ${subAdmin.naam} ${subAdmin.van} verwyder?`)) return;
+    try {
+      const { error } = await supabase
+        .from('gebruikers')
+        .delete()
+        .eq('id', subAdmin.id);
+
+      if (error) throw error;
+      toast.success('Sub-Admin verwyder');
+      await loadSubAdmins();
+    } catch (error: any) {
+      toast.error(error.message || 'Kon nie verwyder nie');
+    }
+  };
+
+  const handleSaveSubAdminPermissions = async () => {
+    if (!editingSubAdmin) return;
+    if (editSubAdminPermissions.length === 0) {
+      toast.error('Kies ten minste een toestemming');
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('gebruikers')
+        .update({ admin_permissions: editSubAdminPermissions })
+        .eq('id', editingSubAdmin.id);
+
+      if (error) throw error;
+      toast.success('Toestemmings opgedateer');
+      setEditingSubAdmin(null);
+      await loadSubAdmins();
+    } catch (error: any) {
+      toast.error(error.message || 'Kon nie stoor nie');
+    }
+  };
+
+  // Helper: check if current user has permission for a section
+  const hasPerm = (permission: AdminPermission): boolean => {
+    return hasAdminPermission(currentUser, permission);
+  };
+
+  // Check if current user is the full hoof_admin (not sub_admin)
+  const isFullHoofAdmin = currentUser?.rol === 'hoof_admin';
 
   if (!currentUser) return null;
 
@@ -1210,7 +1368,7 @@ const HoofAdminDashboard: React.FC = () => {
                 <Crown className="w-5 h-5 md:w-6 md:h-6 text-[#002855]" />
               </div>
               <div>
-                <h1 className="text-lg md:text-2xl font-bold">Hoof Administrateur</h1>
+                <h1 className="text-lg md:text-2xl font-bold">{isFullHoofAdmin ? 'Hoof Administrateur' : 'Sub-Administrateur'}</h1>
                 <p className="text-[#D4A84B] text-sm md:text-base">Welkom, {currentUser.naam} {currentUser.van}</p>
               </div>
             </div>
@@ -1226,49 +1384,51 @@ const HoofAdminDashboard: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 py-4 md:py-8 space-y-6 md:space-y-8">
         {/* Overview Stats */}
-        <section>
-          <div className="flex items-center gap-2 mb-3 md:mb-4">
-            <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-            <h2 className="text-lg md:text-xl font-bold text-[#002855]">Totale Oorsig</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-4">
-            <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
-              <Church className="w-4 h-4 md:w-5 md:h-5 text-[#002855] mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-[#002855]">{gemeentes.length}</p>
-              <p className="text-xs text-gray-500">Gemeentes</p>
+        {isFullHoofAdmin && (
+          <section>
+            <div className="flex items-center gap-2 mb-3 md:mb-4">
+              <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+              <h2 className="text-lg md:text-xl font-bold text-[#002855]">Totale Oorsig</h2>
             </div>
-            <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
-              <Users className="w-4 h-4 md:w-5 md:h-5 text-[#7A8450] mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-[#7A8450]">{totals.lidmate}</p>
-              <p className="text-xs text-gray-500">Lidmate</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-4">
+              <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
+                <Church className="w-4 h-4 md:w-5 md:h-5 text-[#002855] mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold text-[#002855]">{gemeentes.length}</p>
+                <p className="text-xs text-gray-500">Gemeentes</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
+                <Users className="w-4 h-4 md:w-5 md:h-5 text-[#7A8450] mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold text-[#7A8450]">{totals.lidmate}</p>
+                <p className="text-xs text-gray-500">Lidmate</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
+                <MapPin className="w-4 h-4 md:w-5 md:h-5 text-[#8B7CB3] mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold text-[#8B7CB3]">{totals.wyke}</p>
+                <p className="text-xs text-gray-500">Wyke</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
+                <Building2 className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B] mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold text-[#D4A84B]">{totals.besoekpunte}</p>
+                <p className="text-xs text-gray-500">Besoekpunte</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
+                <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-[#9E2A2B] mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold text-[#9E2A2B]">{totals.krisisse}</p>
+                <p className="text-xs text-gray-500">Oop Krisisse</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
+                <Heart className="w-4 h-4 md:w-5 md:h-5 text-[#7A8450] mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold text-[#7A8450]">{totals.aksies}</p>
+                <p className="text-xs text-gray-500">Aksies (Maand)</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm col-span-2 sm:col-span-1">
+                <CreditCard className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B] mb-1 md:mb-2" />
+                <p className="text-xl md:text-2xl font-bold text-[#D4A84B]">R{totals.betalings.toFixed(0)}</p>
+                <p className="text-xs text-gray-500">Bydraes</p>
+              </div>
             </div>
-            <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
-              <MapPin className="w-4 h-4 md:w-5 md:h-5 text-[#8B7CB3] mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-[#8B7CB3]">{totals.wyke}</p>
-              <p className="text-xs text-gray-500">Wyke</p>
-            </div>
-            <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
-              <Building2 className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B] mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-[#D4A84B]">{totals.besoekpunte}</p>
-              <p className="text-xs text-gray-500">Besoekpunte</p>
-            </div>
-            <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
-              <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-[#9E2A2B] mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-[#9E2A2B]">{totals.krisisse}</p>
-              <p className="text-xs text-gray-500">Oop Krisisse</p>
-            </div>
-            <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm">
-              <Heart className="w-4 h-4 md:w-5 md:h-5 text-[#7A8450] mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-[#7A8450]">{totals.aksies}</p>
-              <p className="text-xs text-gray-500">Aksies (Maand)</p>
-            </div>
-            <div className="bg-white rounded-xl p-3 md:p-4 border border-gray-100 shadow-sm col-span-2 sm:col-span-1">
-              <CreditCard className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B] mb-1 md:mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-[#D4A84B]">R{totals.betalings.toFixed(0)}</p>
-              <p className="text-xs text-gray-500">Bydraes</p>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Quick Actions */}
         <section>
@@ -1277,7 +1437,7 @@ const HoofAdminDashboard: React.FC = () => {
             <h2 className="text-lg md:text-xl font-bold text-[#002855]">Vinnige Aksies</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-            <div className="flex flex-col gap-2">
+            {hasPerm('geloofsonderrig') && (<div className="flex flex-col gap-2">
               <button
                 onClick={() => setShowLessonUpload(true)}
                 className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-400 transition-all group"
@@ -1320,9 +1480,9 @@ const HoofAdminDashboard: React.FC = () => {
               >
                 + Skep Nuwe Onderwerp
               </button>
-            </div>
+            </div>)}
 
-            <button
+            {hasPerm('hoof_admin_bestuur') && (<button
               onClick={() => setShowAddHoofAdmin(true)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#D4A84B] transition-all group"
             >
@@ -1333,9 +1493,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Voeg Hoof Admin By</h3>
                 <p className="text-xs md:text-sm text-gray-500">Nuwe hoof administrateur</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('moderator_bestuur') && (<button
               onClick={() => setShowAddModerator(true)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#8B7CB3] transition-all group"
             >
@@ -1346,9 +1506,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Voeg Moderator By</h3>
                 <p className="text-xs md:text-sm text-gray-500">VBO kursus moderator</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('csv_upload') && (<button
               onClick={() => setShowCSVUpload(true)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#7A8450] transition-all group"
             >
@@ -1359,9 +1519,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Laai Lidmate CSV</h3>
                 <p className="text-xs md:text-sm text-gray-500">Voer lidmate in massa in</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('data_export') && (<button
               onClick={() => setShowDataExport(!showDataExport)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#002855] transition-all group"
             >
@@ -1372,9 +1532,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Data Uitvoer</h3>
                 <p className="text-xs md:text-sm text-gray-500">Verslae & CSV uitvoer</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('csv_upload') && (<button
               onClick={downloadTemplate}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-300 transition-all group"
             >
@@ -1385,9 +1545,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">CSV Sjabloon</h3>
                 <p className="text-xs md:text-sm text-gray-500">Laai formaat af</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('menu_builder') && (<button
               onClick={() => setShowMenuBuilder(!showMenuBuilder)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-400 transition-all group"
             >
@@ -1398,9 +1558,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Menu Bestuur</h3>
                 <p className="text-xs md:text-sm text-gray-500">Pas navigasie aan</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('omsendbrief_portaal') && (<button
               onClick={() => setShowOmsendbriefPortaal(!showOmsendbriefPortaal)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-teal-400 transition-all group"
             >
@@ -1411,9 +1571,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Omsendbrief Portaal</h3>
                 <p className="text-xs md:text-sm text-gray-500">Laai dokumente op vir Kletsbot</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('omsendbrief_analise') && (<button
               onClick={() => setShowOmsendbriefAnalise(!showOmsendbriefAnalise)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-amber-400 transition-all group"
             >
@@ -1424,9 +1584,9 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Omsendbrief Analise</h3>
                 <p className="text-xs md:text-sm text-gray-500">Kletsbot vrae-analise</p>
               </div>
-            </button>
+            </button>)}
 
-            <button
+            {hasPerm('musiek_admin') && (<button
               onClick={() => setShowMusiekAdmin(!showMusiekAdmin)}
               className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-pink-400 transition-all group"
             >
@@ -1437,12 +1597,28 @@ const HoofAdminDashboard: React.FC = () => {
                 <h3 className="font-semibold text-[#002855] text-sm md:text-base">Musiek Bestuur</h3>
                 <p className="text-xs md:text-sm text-gray-500">AI musiekgenerasie van liedere</p>
               </div>
-            </button>
+            </button>)}
+
+            {/* Sub-Admin bestuur - slegs volle hoof_admin */}
+            {isFullHoofAdmin && (
+              <button
+                onClick={() => setShowAddSubAdmin(true)}
+                className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-400 transition-all group"
+              >
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors flex-shrink-0">
+                  <UserCheck className="w-5 h-5 md:w-6 md:h-6 text-emerald-600" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-[#002855] text-sm md:text-base">Skep Sub-Admin</h3>
+                  <p className="text-xs md:text-sm text-gray-500">Beperkte admin toegang</p>
+                </div>
+              </button>
+            )}
           </div>
         </section>
 
         {/* Geloofsonderrig Lesse Bestuur Section */}
-        {showLesseBestuur && (
+        {hasPerm('geloofsonderrig') && showLesseBestuur && (
           <section className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <div className="flex items-center gap-3">
@@ -1579,7 +1755,7 @@ const HoofAdminDashboard: React.FC = () => {
         )}
 
         {/* Menu Builder Section */}
-        {showMenuBuilder && (
+        {hasPerm('menu_builder') && showMenuBuilder && (
           <section className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
             <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
               <h2 className="text-xl font-bold text-[#002855]">Dinamiese Menu Bestuurder</h2>
@@ -1592,7 +1768,7 @@ const HoofAdminDashboard: React.FC = () => {
         )}
 
         {/* Omsendbrief Portaal Section */}
-        {showOmsendbriefPortaal && (
+        {hasPerm('omsendbrief_portaal') && showOmsendbriefPortaal && (
           <section className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
             <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
               <h2 className="text-xl font-bold text-[#002855]">Omsendbrief Portaal</h2>
@@ -1605,7 +1781,7 @@ const HoofAdminDashboard: React.FC = () => {
         )}
 
         {/* Omsendbrief Analise Section */}
-        {showOmsendbriefAnalise && (
+        {hasPerm('omsendbrief_analise') && showOmsendbriefAnalise && (
           <section className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
             <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
               <h2 className="text-xl font-bold text-[#002855]">Omsendbrief Kletsbot Analise</h2>
@@ -1618,7 +1794,7 @@ const HoofAdminDashboard: React.FC = () => {
         )}
 
         {/* Musiek Admin Section */}
-        {showMusiekAdmin && (
+        {hasPerm('musiek_admin') && showMusiekAdmin && (
           <section className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm">
             <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
               <h2 className="text-xl font-bold text-[#002855]">Musiek Bestuur</h2>
@@ -1631,7 +1807,7 @@ const HoofAdminDashboard: React.FC = () => {
         )}
 
         {/* Data Export Section */}
-        {showDataExport && (
+        {hasPerm('data_export') && showDataExport && (
           <section>
             <div className="flex items-center justify-between mb-3 md:mb-4">
               <div className="flex items-center gap-2">
@@ -1650,411 +1826,429 @@ const HoofAdminDashboard: React.FC = () => {
         )}
 
         {/* Moderators Section */}
-        <section>
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="flex items-center gap-2">
-              <UserCog className="w-4 h-4 md:w-5 md:h-5 text-[#8B7CB3]" />
-              <h2 className="text-lg md:text-xl font-bold text-[#002855]">VBO Moderators</h2>
+        {hasPerm('moderator_bestuur') && (
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <UserCog className="w-4 h-4 md:w-5 md:h-5 text-[#8B7CB3]" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">VBO Moderators</h2>
+              </div>
+              <button
+                onClick={() => setShowAddModerator(true)}
+                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#8B7CB3] text-white font-semibold rounded-lg hover:bg-[#7a6ba3] transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Voeg By</span>
+              </button>
             </div>
-            <button
-              onClick={() => setShowAddModerator(true)}
-              className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#8B7CB3] text-white font-semibold rounded-lg hover:bg-[#7a6ba3] transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Voeg By</span>
-            </button>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Naam</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">E-pos</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Selfoon</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Aksies</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {loadingModerators ? (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center">
-                        <Loader2 className="w-6 h-6 text-[#8B7CB3] animate-spin mx-auto" />
-                      </td>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Naam</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">E-pos</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Selfoon</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Aksies</th>
                     </tr>
-                  ) : moderators.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-sm">
-                        Geen moderators gevind nie
-                      </td>
-                    </tr>
-                  ) : (
-                    moderators.map(moderator => (
-                      <tr key={moderator.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-3 md:px-4 py-3">
-                          <div className="flex items-center gap-2 md:gap-3">
-                            <div className="w-8 h-8 rounded-full bg-[#8B7CB3] flex items-center justify-center flex-shrink-0">
-                              <span className="text-white text-xs font-bold">
-                                {moderator.naam[0]}{moderator.van[0]}
-                              </span>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-medium text-gray-900 text-sm truncate">{moderator.naam} {moderator.van}</p>
-                              <span className="text-xs text-[#8B7CB3] font-medium sm:hidden">{moderator.epos}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">{moderator.epos || '-'}</td>
-                        <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{moderator.selfoon || '-'}</td>
-                        <td className="px-3 md:px-4 py-3">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${moderator.aktief ? 'bg-[#7A8450]/10 text-[#7A8450]' : 'bg-gray-100 text-gray-500'
-                            }`}>
-                            {moderator.aktief ? 'Aktief' : 'Onaktief'}
-                          </span>
-                        </td>
-                        <td className="px-3 md:px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleToggleModeratorStatus(moderator)}
-                              className={`px-2 md:px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${moderator.aktief
-                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                : 'bg-green-100 text-green-700 hover:bg-green-200'
-                                }`}
-                            >
-                              {moderator.aktief ? 'Deaktiveer' : 'Aktiveer'}
-                            </button>
-                            <button
-                              onClick={() => setEditingUser(moderator)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Wysig"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser({ ...moderator, rol: 'moderator' })}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Verwyder"
-                              disabled={deletingUser === moderator.id}
-                            >
-                              {deletingUser === moderator.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            </button>
-                          </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {loadingModerators ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center">
+                          <Loader2 className="w-6 h-6 text-[#8B7CB3] animate-spin mx-auto" />
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : moderators.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-sm">
+                          Geen moderators gevind nie
+                        </td>
+                      </tr>
+                    ) : (
+                      moderators.map(moderator => (
+                        <tr key={moderator.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-3 md:px-4 py-3">
+                            <div className="flex items-center gap-2 md:gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#8B7CB3] flex items-center justify-center flex-shrink-0">
+                                <span className="text-white text-xs font-bold">
+                                  {moderator.naam[0]}{moderator.van[0]}
+                                </span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-gray-900 text-sm truncate">{moderator.naam} {moderator.van}</p>
+                                <span className="text-xs text-[#8B7CB3] font-medium sm:hidden">{moderator.epos}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">{moderator.epos || '-'}</td>
+                          <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{moderator.selfoon || '-'}</td>
+                          <td className="px-3 md:px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${moderator.aktief ? 'bg-[#7A8450]/10 text-[#7A8450]' : 'bg-gray-100 text-gray-500'
+                              }`}>
+                              {moderator.aktief ? 'Aktief' : 'Onaktief'}
+                            </span>
+                          </td>
+                          <td className="px-3 md:px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleToggleModeratorStatus(moderator)}
+                                className={`px-2 md:px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${moderator.aktief
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  }`}
+                              >
+                                {moderator.aktief ? 'Deaktiveer' : 'Aktiveer'}
+                              </button>
+                              <button
+                                onClick={() => setEditingUser(moderator)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Wysig"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser({ ...moderator, rol: 'moderator' })}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Verwyder"
+                                disabled={deletingUser === moderator.id}
+                              >
+                                {deletingUser === moderator.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* VBO Bestuur Section */}
-        <section>
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="flex items-center gap-2">
-              <Award className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-              <h2 className="text-lg md:text-xl font-bold text-[#002855]">VBO Bestuur (Indienings &amp; Aktiwiteite)</h2>
+        {hasPerm('vbo_bestuur') && (
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">VBO Bestuur (Indienings &amp; Aktiwiteite)</h2>
+              </div>
+              <button
+                onClick={() => setShowVBOBestuur(!showVBOBestuur)}
+                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#D4A84B] text-[#002855] font-semibold rounded-lg hover:bg-[#c49a3d] transition-colors"
+              >
+                {showVBOBestuur ? 'Verberg' : 'Bestuur'}
+              </button>
             </div>
-            <button
-              onClick={() => setShowVBOBestuur(!showVBOBestuur)}
-              className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#D4A84B] text-[#002855] font-semibold rounded-lg hover:bg-[#c49a3d] transition-colors"
-            >
-              {showVBOBestuur ? 'Verberg' : 'Bestuur'}
-            </button>
-          </div>
 
-          {showVBOBestuur && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
-              <VBOBestuur />
-            </div>
-          )}
-        </section>
+            {showVBOBestuur && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
+                <VBOBestuur />
+              </div>
+            )}
+          </section>
+        )}
 
         {/* KIOG Geloofsonderrig Transaksielog Section */}
-        <section>
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-              <h2 className="text-lg md:text-xl font-bold text-[#002855]">KI-Kats Transaksielog</h2>
-            </div>
-            <div className="flex gap-2">
-              {showGeloofsonderrigTransaksies && (
+        {hasPerm('geloofsonderrig_transaksies') && (
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">KI-Kats Transaksielog</h2>
+              </div>
+              <div className="flex gap-2">
+                {showGeloofsonderrigTransaksies && (
+                  <button
+                    onClick={() => setRefreshTransaksieKey(k => k + 1)}
+                    className="px-3 md:px-4 py-2 text-xs md:text-sm bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1"
+                    title="Herlaai data"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Herlaai
+                  </button>
+                )}
                 <button
-                  onClick={() => setRefreshTransaksieKey(k => k + 1)}
-                  className="px-3 md:px-4 py-2 text-xs md:text-sm bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1"
-                  title="Herlaai data"
+                  onClick={() => setShowGeloofsonderrigTransaksies(!showGeloofsonderrigTransaksies)}
+                  className="px-3 md:px-4 py-2 text-xs md:text-sm bg-amber-100 text-amber-800 font-semibold rounded-lg hover:bg-amber-200 transition-colors"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Herlaai
+                  {showGeloofsonderrigTransaksies ? 'Verberg' : 'Wys'}
                 </button>
-              )}
-              <button
-                onClick={() => setShowGeloofsonderrigTransaksies(!showGeloofsonderrigTransaksies)}
-                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-amber-100 text-amber-800 font-semibold rounded-lg hover:bg-amber-200 transition-colors"
-              >
-                {showGeloofsonderrigTransaksies ? 'Verberg' : 'Wys'}
-              </button>
+              </div>
             </div>
-          </div>
 
-          {showGeloofsonderrigTransaksies && (
-            <GeloofsonderrigTransaksieLog key={refreshTransaksieKey} />
-          )}
-        </section>
+            {showGeloofsonderrigTransaksies && (
+              <GeloofsonderrigTransaksieLog key={refreshTransaksieKey} />
+            )}
+          </section>
+        )}
 
-        {/* KIOG Geloofsonderrig Leaderboard (met name - slegs hoof_admin) */}
-        <section>
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="flex items-center gap-2">
-              <Award className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-              <h2 className="text-lg md:text-xl font-bold text-[#002855]">KI-Kats Ranglys (met name)</h2>
-            </div>
-            <div className="flex gap-2">
-              {showGeloofsonderrigLeaderboard && (
+        {/* KIOG Geloofsonderrig Leaderboard */}
+        {hasPerm('geloofsonderrig_leaderboard') && (
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">KI-Kats Ranglys (met name)</h2>
+              </div>
+              <div className="flex gap-2">
+                {showGeloofsonderrigLeaderboard && (
+                  <button
+                    onClick={() => setRefreshLeaderboardKey(k => k + 1)}
+                    className="px-3 md:px-4 py-2 text-xs md:text-sm bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1"
+                    title="Herlaai data"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Herlaai
+                  </button>
+                )}
                 <button
-                  onClick={() => setRefreshLeaderboardKey(k => k + 1)}
-                  className="px-3 md:px-4 py-2 text-xs md:text-sm bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1"
-                  title="Herlaai data"
+                  onClick={() => setShowGeloofsonderrigLeaderboard(!showGeloofsonderrigLeaderboard)}
+                  className="px-3 md:px-4 py-2 text-xs md:text-sm bg-amber-100 text-amber-800 font-semibold rounded-lg hover:bg-amber-200 transition-colors"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Herlaai
+                  {showGeloofsonderrigLeaderboard ? 'Verberg' : 'Wys'}
                 </button>
-              )}
-              <button
-                onClick={() => setShowGeloofsonderrigLeaderboard(!showGeloofsonderrigLeaderboard)}
-                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-amber-100 text-amber-800 font-semibold rounded-lg hover:bg-amber-200 transition-colors"
-              >
-                {showGeloofsonderrigLeaderboard ? 'Verberg' : 'Wys'}
-              </button>
+              </div>
             </div>
-          </div>
 
-          {showGeloofsonderrigLeaderboard && (
-            <GeloofsonderrigLeaderboardAdmin key={refreshLeaderboardKey} />
-          )}
-        </section>
+            {showGeloofsonderrigLeaderboard && (
+              <GeloofsonderrigLeaderboardAdmin key={refreshLeaderboardKey} />
+            )}
+          </section>
+        )}
 
         {/* LMS Kursus Bestuur Section */}
-        <section>
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-              <h2 className="text-lg md:text-xl font-bold text-[#002855]">LMS Kursus Bestuur</h2>
+        {hasPerm('lms_stats') && (
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">LMS Kursus Bestuur</h2>
+              </div>
+              <button
+                onClick={() => setShowLMSKursusBestuur(!showLMSKursusBestuur)}
+                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#002855] text-white rounded-lg hover:bg-[#001a3d] transition-colors"
+              >
+                {showLMSKursusBestuur ? 'Verberg' : 'Bestuur'}
+              </button>
             </div>
-            <button
-              onClick={() => setShowLMSKursusBestuur(!showLMSKursusBestuur)}
-              className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#002855] text-white rounded-lg hover:bg-[#001a3d] transition-colors"
-            >
-              {showLMSKursusBestuur ? 'Verberg' : 'Bestuur'}
-            </button>
-          </div>
 
-          {showLMSKursusBestuur && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
-              <LMSKursusBestuur />
-            </div>
-          )}
-        </section>
+            {showLMSKursusBestuur && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
+                <LMSKursusBestuur />
+              </div>
+            )}
+          </section>
+        )}
 
         {/* LMS Statistieke Section */}
-        <section>
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="flex items-center gap-2">
-              <GraduationCap className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-              <h2 className="text-lg md:text-xl font-bold text-[#002855]">LMS Statistieke</h2>
+        {hasPerm('lms_stats') && (
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">LMS Statistieke</h2>
+              </div>
+              <button
+                onClick={() => setShowLMSStats(!showLMSStats)}
+                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                {showLMSStats ? 'Verberg' : 'Wys'}
+              </button>
             </div>
-            <button
-              onClick={() => setShowLMSStats(!showLMSStats)}
-              className="px-3 md:px-4 py-2 text-xs md:text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              {showLMSStats ? 'Verberg' : 'Wys'}
-            </button>
-          </div>
 
-          {showLMSStats && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
-              <LMSStatistieke />
-            </div>
-          )}
-        </section>
+            {showLMSStats && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
+                <LMSStatistieke />
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Denominasie Lidmaattellings Section */}
-        <section>
-          <div className="flex items-center justify-between mb-3 md:mb-4">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-              <h2 className="text-lg md:text-xl font-bold text-[#002855]">Algehele Lidmaattellings</h2>
+        {hasPerm('denom_stats') && (
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">Algehele Lidmaattellings</h2>
+              </div>
+              <button
+                onClick={() => setShowDenomStats(!showDenomStats)}
+                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#D4A84B]/10 text-[#002855] font-bold rounded-lg hover:bg-[#D4A84B]/20 transition-colors"
+              >
+                {showDenomStats ? 'Verberg' : 'Wys Denominasie Statistiek'}
+              </button>
             </div>
-            <button
-              onClick={() => setShowDenomStats(!showDenomStats)}
-              className="px-3 md:px-4 py-2 text-xs md:text-sm bg-[#D4A84B]/10 text-[#002855] font-bold rounded-lg hover:bg-[#D4A84B]/20 transition-colors"
-            >
-              {showDenomStats ? 'Verberg' : 'Wys Denominasie Statistiek'}
-            </button>
-          </div>
 
-          {showDenomStats && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
-              <DenominationStats />
-            </div>
-          )}
-        </section>
+            {showDenomStats && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
+                <DenominationStats />
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Hoof Admins Section */}
-        <section>
-          <div className="flex items-center gap-2 mb-3 md:mb-4">
-            <Shield className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-            <h2 className="text-lg md:text-xl font-bold text-[#002855]">Hoof Administrateurs</h2>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Naam</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">E-pos</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Selfoon</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
-                    <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Aksies</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {hoofAdmins.length === 0 ? (
+        {hasPerm('hoof_admin_bestuur') && (
+          <section>
+            <div className="flex items-center gap-2 mb-3 md:mb-4">
+              <Shield className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+              <h2 className="text-lg md:text-xl font-bold text-[#002855]">Hoof Administrateurs</h2>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-sm">
-                        Geen hoof administrateurs gevind nie
-                      </td>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Naam</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">E-pos</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Selfoon</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Aksies</th>
                     </tr>
-                  ) : (
-                    hoofAdmins.map(admin => (
-                      <tr key={admin.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-3 md:px-4 py-3">
-                          <div className="flex items-center gap-2 md:gap-3">
-                            <div className="w-8 h-8 rounded-full bg-[#D4A84B] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                              {admin.profile_pic_url ? (
-                                <img src={admin.profile_pic_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="text-[#002855] text-xs font-bold">
-                                  {admin.naam[0]}{admin.van[0]}
-                                </span>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-medium text-gray-900 text-sm truncate">{admin.naam} {admin.van}</p>
-                              <span className="text-xs text-[#D4A84B] font-medium sm:hidden">{admin.epos}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">{admin.epos || '-'}</td>
-                        <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{admin.selfoon || '-'}</td>
-                        <td className="px-3 md:px-4 py-3">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${admin.aktief ? 'bg-[#7A8450]/10 text-[#7A8450]' : 'bg-gray-100 text-gray-500'
-                            }`}>
-                            {admin.aktief ? 'Aktief' : 'Onaktief'}
-                          </span>
-                        </td>
-                        <td className="px-3 md:px-4 py-3 text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setEditingUser(admin)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Wysig"
-                              disabled={admin.id === currentUser.id}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(admin)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Verwyder"
-                              disabled={admin.id === currentUser.id || deletingUser === admin.id}
-                            >
-                              {deletingUser === admin.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            </button>
-                          </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {hoofAdmins.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-sm">
+                          Geen hoof administrateurs gevind nie
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      hoofAdmins.map(admin => (
+                        <tr key={admin.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-3 md:px-4 py-3">
+                            <div className="flex items-center gap-2 md:gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#D4A84B] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                {admin.profile_pic_url ? (
+                                  <img src={admin.profile_pic_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="text-[#002855] text-xs font-bold">
+                                    {admin.naam[0]}{admin.van[0]}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-gray-900 text-sm truncate">{admin.naam} {admin.van}</p>
+                                <span className="text-xs text-[#D4A84B] font-medium sm:hidden">{admin.epos}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">{admin.epos || '-'}</td>
+                          <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{admin.selfoon || '-'}</td>
+                          <td className="px-3 md:px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${admin.aktief ? 'bg-[#7A8450]/10 text-[#7A8450]' : 'bg-gray-100 text-gray-500'
+                              }`}>
+                              {admin.aktief ? 'Aktief' : 'Onaktief'}
+                            </span>
+                          </td>
+                          <td className="px-3 md:px-4 py-3 text-sm text-gray-600">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setEditingUser(admin)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Wysig"
+                                disabled={admin.id === currentUser.id}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(admin)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Verwyder"
+                                disabled={admin.id === currentUser.id || deletingUser === admin.id}
+                              >
+                                {deletingUser === admin.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Gemeentes Grid */}
-        <section>
-          <div className="flex items-center gap-2 mb-3 md:mb-4">
-            <Church className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
-            <h2 className="text-lg md:text-xl font-bold text-[#002855]">Alle Gemeentes</h2>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 text-[#D4A84B] animate-spin" />
+        {hasPerm('gemeente_bestuur') && (
+          <section>
+            <div className="flex items-center gap-2 mb-3 md:mb-4">
+              <Church className="w-4 h-4 md:w-5 md:h-5 text-[#D4A84B]" />
+              <h2 className="text-lg md:text-xl font-bold text-[#002855]">Alle Gemeentes</h2>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-              {gemeenteStats.map(stat => {
-                const gemeente = gemeentes.find(g => g.id === stat.gemeente_id);
-                return (
-                  <div key={stat.gemeente_id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="p-3 md:p-4 border-b border-gray-100">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {stat.logo_url ? (
-                            <img src={stat.logo_url} alt={stat.gemeente_naam} className="w-full h-full object-cover" />
-                          ) : (
-                            <Church className="w-5 h-5 md:w-6 md:h-6 text-[#002855]" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-[#002855] truncate text-sm md:text-base">{stat.gemeente_naam}</h3>
-                          {gemeente?.is_demo && (
-                            <span className="px-2 py-0.5 bg-[#D4A84B]/20 text-[#D4A84B] text-xs font-medium rounded-full">
-                              Demo
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="p-3 md:p-4 grid grid-cols-2 gap-2 md:gap-3">
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span className="text-xs md:text-sm text-gray-600">{stat.totale_lidmate} lidmate</span>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 text-[#D4A84B] animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                {gemeenteStats.map(stat => {
+                  const gemeente = gemeentes.find(g => g.id === stat.gemeente_id);
+                  return (
+                    <div key={stat.gemeente_id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                      <div className="p-3 md:p-4 border-b border-gray-100">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {stat.logo_url ? (
+                              <img src={stat.logo_url} alt={stat.gemeente_naam} className="w-full h-full object-cover" />
+                            ) : (
+                              <Church className="w-5 h-5 md:w-6 md:h-6 text-[#002855]" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-[#002855] truncate text-sm md:text-base">{stat.gemeente_naam}</h3>
+                            {gemeente?.is_demo && (
+                              <span className="px-2 py-0.5 bg-[#D4A84B]/20 text-[#D4A84B] text-xs font-medium rounded-full">
+                                Demo
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span className="text-xs md:text-sm text-gray-600">{stat.totale_wyke} wyke</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-[#9E2A2B] flex-shrink-0" />
-                        <span className="text-xs md:text-sm text-gray-600">{stat.oop_krisisse} krisisse</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <HelpCircle className="w-4 h-4 text-[#8B7CB3] flex-shrink-0" />
-                        <span className="text-xs md:text-sm text-gray-600">{stat.nuwe_vrae} vrae</span>
-                      </div>
-                    </div>
 
-                    <div className="p-3 md:p-4 pt-0">
-                      <button
-                        onClick={() => handleViewGemeente(stat.gemeente_id)}
-                        className="w-full flex items-center justify-center gap-2 py-2 bg-[#002855] text-white font-medium rounded-lg hover:bg-[#001a3d] transition-colors text-sm"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Bekyk Gemeente
-                      </button>
+                      <div className="p-3 md:p-4 grid grid-cols-2 gap-2 md:gap-3">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-xs md:text-sm text-gray-600">{stat.totale_lidmate} lidmate</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-xs md:text-sm text-gray-600">{stat.totale_wyke} wyke</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-[#9E2A2B] flex-shrink-0" />
+                          <span className="text-xs md:text-sm text-gray-600">{stat.oop_krisisse} krisisse</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <HelpCircle className="w-4 h-4 text-[#8B7CB3] flex-shrink-0" />
+                          <span className="text-xs md:text-sm text-gray-600">{stat.nuwe_vrae} vrae</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 md:p-4 pt-0">
+                        <button
+                          onClick={() => handleViewGemeente(stat.gemeente_id)}
+                          className="w-full flex items-center justify-center gap-2 py-2 bg-[#002855] text-white font-medium rounded-lg hover:bg-[#001a3d] transition-colors text-sm"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Bekyk Gemeente
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
       </main>
 
       {/* Add Hoof Admin Modal */}
@@ -3036,6 +3230,315 @@ const HoofAdminDashboard: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Add Sub-Admin Modal */}
+      {showAddSubAdmin && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-lg font-bold text-[#002855]">Nuwe Sub-Administrateur</h2>
+              </div>
+              <button onClick={() => setShowAddSubAdmin(false)} className="p-2 rounded-lg hover:bg-gray-100">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Naam *</label>
+                  <input
+                    type="text"
+                    value={newSubAdmin.naam}
+                    onChange={(e) => setNewSubAdmin({ ...newSubAdmin, naam: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Van *</label>
+                  <input
+                    type="text"
+                    value={newSubAdmin.van}
+                    onChange={(e) => setNewSubAdmin({ ...newSubAdmin, van: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">E-pos / Gebruikersnaam *</label>
+                <input
+                  type="email"
+                  value={newSubAdmin.epos}
+                  onChange={(e) => setNewSubAdmin({ ...newSubAdmin, epos: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Selfoon</label>
+                <input
+                  type="tel"
+                  value={newSubAdmin.selfoon}
+                  onChange={(e) => setNewSubAdmin({ ...newSubAdmin, selfoon: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Wagwoord *</label>
+                  <input
+                    type="password"
+                    value={newSubAdmin.wagwoord}
+                    onChange={(e) => setNewSubAdmin({ ...newSubAdmin, wagwoord: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm"
+                    placeholder="Min 6 karakters"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bevestig Wagwoord *</label>
+                  <input
+                    type="password"
+                    value={newSubAdmin.wagwoord_bevestig}
+                    onChange={(e) => setNewSubAdmin({ ...newSubAdmin, wagwoord_bevestig: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Permissions Checkboxes */}
+              <div>
+                <label className="block text-sm font-bold text-[#002855] mb-2">Toestemmings *</label>
+                <p className="text-xs text-gray-500 mb-3">Kies watter funksies hierdie gebruiker mag gebruik:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  {ALL_ADMIN_PERMISSIONS.filter(p => p !== 'sub_admin_bestuur').map(perm => (
+                    <label key={perm} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={newSubAdmin.permissions.includes(perm)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewSubAdmin({ ...newSubAdmin, permissions: [...newSubAdmin.permissions, perm] });
+                          } else {
+                            setNewSubAdmin({ ...newSubAdmin, permissions: newSubAdmin.permissions.filter(p => p !== perm) });
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm text-gray-700">{ADMIN_PERMISSION_LABELS[perm]}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewSubAdmin({ ...newSubAdmin, permissions: ALL_ADMIN_PERMISSIONS.filter(p => p !== 'sub_admin_bestuur') })}
+                    className="text-xs text-emerald-600 hover:underline"
+                  >
+                    Kies Alles
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewSubAdmin({ ...newSubAdmin, permissions: [] })}
+                    className="text-xs text-gray-500 hover:underline"
+                  >
+                    Kies Niks
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={handleAddSubAdmin}
+                disabled={addingSubAdmin}
+                className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+              >
+                {addingSubAdmin ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserCheck className="w-5 h-5" />}
+                Skep Sub-Admin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Sub-Admin Permissions Modal */}
+      {editingSubAdmin && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <Edit className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-[#002855]">Wysig Toestemmings</h2>
+                  <p className="text-sm text-gray-500">{editingSubAdmin.naam} {editingSubAdmin.van}</p>
+                </div>
+              </div>
+              <button onClick={() => setEditingSubAdmin(null)} className="p-2 rounded-lg hover:bg-gray-100">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto p-3 bg-gray-50 rounded-xl border border-gray-200">
+                {ALL_ADMIN_PERMISSIONS.filter(p => p !== 'sub_admin_bestuur').map(perm => (
+                  <label key={perm} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={editSubAdminPermissions.includes(perm)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setEditSubAdminPermissions([...editSubAdminPermissions, perm]);
+                        } else {
+                          setEditSubAdminPermissions(editSubAdminPermissions.filter(p => p !== perm));
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm text-gray-700">{ADMIN_PERMISSION_LABELS[perm]}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditSubAdminPermissions(ALL_ADMIN_PERMISSIONS.filter(p => p !== 'sub_admin_bestuur'))}
+                  className="text-xs text-emerald-600 hover:underline"
+                >
+                  Kies Alles
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditSubAdminPermissions([])}
+                  className="text-xs text-gray-500 hover:underline"
+                >
+                  Kies Niks
+                </button>
+              </div>
+              <button
+                onClick={handleSaveSubAdminPermissions}
+                className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                Stoor Toestemmings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Admins List Section - within main, before closing div */}
+      {isFullHoofAdmin && subAdmins.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 pb-8">
+          <section>
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" />
+                <h2 className="text-lg md:text-xl font-bold text-[#002855]">Sub-Administrateurs</h2>
+              </div>
+              <button
+                onClick={() => setShowAddSubAdmin(true)}
+                className="px-3 md:px-4 py-2 text-xs md:text-sm bg-emerald-500 text-white font-semibold rounded-lg hover:bg-emerald-600 transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Voeg By</span>
+              </button>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Naam</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">E-pos</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Toestemmings</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                      <th className="text-left px-3 md:px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Aksies</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {loadingSubAdmins ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center">
+                          <Loader2 className="w-6 h-6 text-emerald-500 animate-spin mx-auto" />
+                        </td>
+                      </tr>
+                    ) : (
+                      subAdmins.map(subAdmin => (
+                        <tr key={subAdmin.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-3 md:px-4 py-3">
+                            <div className="flex items-center gap-2 md:gap-3">
+                              <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                                <span className="text-white text-xs font-bold">
+                                  {subAdmin.naam[0]}{subAdmin.van[0]}
+                                </span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-gray-900 text-sm truncate">{subAdmin.naam} {subAdmin.van}</p>
+                                <span className="text-xs text-emerald-600 font-medium sm:hidden">{subAdmin.epos}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 md:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">{subAdmin.epos || '-'}</td>
+                          <td className="px-3 md:px-4 py-3">
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {(subAdmin.admin_permissions || []).slice(0, 3).map(perm => (
+                                <span key={perm} className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700">
+                                  {ADMIN_PERMISSION_LABELS[perm]}
+                                </span>
+                              ))}
+                              {(subAdmin.admin_permissions || []).length > 3 && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-gray-100 text-gray-500">
+                                  +{(subAdmin.admin_permissions || []).length - 3} meer
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 md:px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${subAdmin.aktief ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
+                              {subAdmin.aktief ? 'Aktief' : 'Onaktief'}
+                            </span>
+                          </td>
+                          <td className="px-3 md:px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingSubAdmin(subAdmin);
+                                  setEditSubAdminPermissions(subAdmin.admin_permissions || []);
+                                }}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Wysig Toestemmings"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleToggleSubAdminStatus(subAdmin)}
+                                className={`px-2 md:px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${subAdmin.aktief
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  }`}
+                              >
+                                {subAdmin.aktief ? 'Deaktiveer' : 'Aktiveer'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSubAdmin(subAdmin)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Verwyder"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         </div>
       )}
     </div>

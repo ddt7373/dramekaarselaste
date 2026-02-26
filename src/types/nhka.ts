@@ -1,7 +1,51 @@
 // NHKA App Types
 
-// Added 'moderator' role for VBO management
-export type UserRole = 'hoof_admin' | 'subadmin' | 'predikant' | 'groepleier' | 'lidmaat' | 'ouderling' | 'diaken' | 'admin' | 'moderator' | 'kerkraad' | 'eksterne_gebruiker' | 'geloofsonderrig_admin';
+// Added 'moderator' role for VBO management, 'sub_admin' for selective HoofAdmin access
+export type UserRole = 'hoof_admin' | 'sub_admin' | 'subadmin' | 'predikant' | 'groepleier' | 'lidmaat' | 'ouderling' | 'diaken' | 'admin' | 'moderator' | 'kerkraad' | 'eksterne_gebruiker' | 'geloofsonderrig_admin';
+
+// Admin permissions for sub_admin users - each maps to a section in HoofAdminDashboard
+export type AdminPermission =
+  | 'geloofsonderrig'
+  | 'hoof_admin_bestuur'
+  | 'moderator_bestuur'
+  | 'csv_upload'
+  | 'data_export'
+  | 'menu_builder'
+  | 'omsendbrief_portaal'
+  | 'omsendbrief_analise'
+  | 'musiek_admin'
+  | 'vbo_bestuur'
+  | 'geloofsonderrig_transaksies'
+  | 'geloofsonderrig_leaderboard'
+  | 'lms_stats'
+  | 'denom_stats'
+  | 'rol_bestuur'
+  | 'gemeente_bestuur'
+  | 'sub_admin_bestuur';
+
+// Labels for admin permissions (Afrikaans)
+export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
+  geloofsonderrig: 'Geloofsonderrig Bestuur',
+  hoof_admin_bestuur: 'Hoof Admin Bestuur',
+  moderator_bestuur: 'VBO Moderator Bestuur',
+  csv_upload: 'Lidmate CSV Invoer',
+  data_export: 'Data Uitvoer',
+  menu_builder: 'Menu Bestuur',
+  omsendbrief_portaal: 'Omsendbrief Portaal',
+  omsendbrief_analise: 'Omsendbrief Analise',
+  musiek_admin: 'Musiek Bestuur',
+  vbo_bestuur: 'VBO Bestuur',
+  geloofsonderrig_transaksies: 'KI-Kats Transaksielog',
+  geloofsonderrig_leaderboard: 'KI-Kats Ranglys',
+  lms_stats: 'LMS Statistieke',
+  denom_stats: 'Denominasie Statistieke',
+  rol_bestuur: 'Rol Bestuur',
+  gemeente_bestuur: 'Gemeente Bestuur',
+  sub_admin_bestuur: 'Sub-Admin Bestuur',
+};
+
+// All available admin permissions
+export const ALL_ADMIN_PERMISSIONS: AdminPermission[] = Object.keys(ADMIN_PERMISSION_LABELS) as AdminPermission[];
 
 export interface Gemeente {
   id: string;
@@ -114,6 +158,7 @@ export interface Gebruiker {
   epos?: string;
   rol: UserRole;
   app_roles?: UserRole[];
+  admin_permissions?: AdminPermission[];
   wyk_id?: string;
   besoekpunt_id?: string;
   gemeente_id?: string;
@@ -1219,7 +1264,24 @@ export const isWykLeier = (rol: UserRole): boolean => {
 
 // Hoof Admin is above all gemeentes - they don't belong to a specific gemeente
 export const isHoofAdmin = (rol: UserRole): boolean => {
-  return rol === 'hoof_admin';
+  return rol === 'hoof_admin' || rol === 'sub_admin';
+};
+
+// Check if user is specifically a sub_admin (with limited permissions)
+export const isSubAdmin = (rol: UserRole): boolean => {
+  return rol === 'sub_admin';
+};
+
+// Check if a sub_admin has a specific permission
+export const hasAdminPermission = (user: Gebruiker | null, permission: AdminPermission): boolean => {
+  if (!user) return false;
+  // Hoof admins have all permissions
+  if (user.rol === 'hoof_admin') return true;
+  // Sub admins have only their assigned permissions
+  if (user.rol === 'sub_admin') {
+    return user.admin_permissions?.includes(permission) || false;
+  }
+  return false;
 };
 
 // Gemeente Admin is tied to a specific gemeente

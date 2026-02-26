@@ -277,10 +277,10 @@ const GemeenteSelect: React.FC = () => {
                             key={gemeente.id}
                             onClick={() => handleGemeenteClick(gemeente.id)}
                             className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${isSelected
-                                ? 'border-[#D4A84B] bg-[#D4A84B]/10'
-                                : isUserGemeente
-                                  ? 'border-[#D4A84B]/50 bg-[#D4A84B]/5 hover:border-[#D4A84B]'
-                                  : 'border-gray-200 hover:border-[#D4A84B]/50'
+                              ? 'border-[#D4A84B] bg-[#D4A84B]/10'
+                              : isUserGemeente
+                                ? 'border-[#D4A84B]/50 bg-[#D4A84B]/5 hover:border-[#D4A84B]'
+                                : 'border-gray-200 hover:border-[#D4A84B]/50'
                               }`}
                           >
                             <div className="flex items-center gap-3">
@@ -339,10 +339,10 @@ const GemeenteSelect: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-[#002855]">
-                    {loginMode === 'hoof_admin' ? 'Hoof Administrateur' : 'VBO Moderator'}
+                    {loginMode === 'hoof_admin' ? 'Hoof / Sub-Admin' : 'VBO Moderator'}
                   </h2>
                   <p className="text-gray-500 text-sm">
-                    {loginMode === 'hoof_admin' ? 'Meld aan met jou hoof admin besonderhede' : 'Meld aan met jou moderator besonderhede'}
+                    {loginMode === 'hoof_admin' ? 'Meld aan as hoof- of sub-administrateur' : 'Meld aan met jou moderator besonderhede'}
                   </p>
                 </div>
               </div>
@@ -406,10 +406,10 @@ const GemeenteSelect: React.FC = () => {
             <div className="mt-4 flex flex-col items-center gap-2">
               <button
                 onClick={() => setLoginMode('hoof_admin')}
-                className="text-white/60 hover:text-[#D4A84B] text-sm transition-colors flex items-center gap-2"
+                className="text-white/60 hover:text-[#D4A84B] text-sm transition-colors flex items-center gap-2 mt-4"
               >
                 <Shield className="w-4 h-4" />
-                Hoof Administrateur Aanmelding
+                Hoof / Sub-Administrateur Aanmelding
               </button>
               <button
                 onClick={() => setLoginMode('moderator')}
