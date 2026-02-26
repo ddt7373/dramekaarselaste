@@ -368,8 +368,8 @@ const Betaling: React.FC = () => {
                     type="button"
                     onClick={() => setTipe('offergawe')}
                     className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${tipe === 'offergawe'
-                        ? 'border-[#D4A84B] bg-[#D4A84B]/5'
-                        : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-[#D4A84B] bg-[#D4A84B]/5'
+                      : 'border-gray-200 hover:border-gray-300'
                       }`}
                   >
                     <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${tipe === 'offergawe' ? 'bg-[#D4A84B]' : 'bg-gray-100'
@@ -388,8 +388,8 @@ const Betaling: React.FC = () => {
                     type="button"
                     onClick={() => setTipe('ander')}
                     className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${tipe === 'ander'
-                        ? 'border-[#D4A84B] bg-[#D4A84B]/5'
-                        : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-[#D4A84B] bg-[#D4A84B]/5'
+                      : 'border-gray-200 hover:border-gray-300'
                       }`}
                   >
                     <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${tipe === 'ander' ? 'bg-[#D4A84B]' : 'bg-gray-100'
@@ -407,8 +407,8 @@ const Betaling: React.FC = () => {
                     type="button"
                     onClick={() => setTipe('kiog')}
                     className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border-2 transition-all ${tipe === 'kiog'
-                        ? 'border-amber-500 bg-amber-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-amber-500 bg-amber-50'
+                      : 'border-gray-200 hover:border-gray-300'
                       }`}
                   >
                     <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${tipe === 'kiog' ? 'bg-amber-500' : 'bg-gray-100'
@@ -471,8 +471,8 @@ const Betaling: React.FC = () => {
                       type="button"
                       onClick={() => setBedrag(amount.toString())}
                       className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-sm transition-colors ${bedrag === amount.toString()
-                          ? 'bg-[#002855] text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-[#002855] text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                     >
                       R{amount}

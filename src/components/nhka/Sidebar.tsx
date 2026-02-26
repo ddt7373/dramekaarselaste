@@ -40,17 +40,19 @@ import {
   ShoppingBag,
   MessageCircle,
   BookOpenCheck,
+  Laptop,
+  Music,
   Zap,
   ClipboardList,
   ChevronDown,
-  Shield,
-  Music
+  Shield
 } from 'lucide-react';
-
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  className?: string;
 }
 
 interface NavItem {
@@ -58,7 +60,7 @@ interface NavItem {
   label: string;
   dynamicLabel?: (rol: string) => string;
   icon: React.ReactNode;
-  roles: ('lidmaat' | 'leier' | 'admin' | 'hoof_admin' | 'wyk_leier' | 'predikant' | 'moderator' | 'eksterne_gebruiker')[];
+  roles: ('lidmaat' | 'leier' | 'admin' | 'subadmin' | 'sub_admin' | 'hoof_admin' | 'wyk_leier' | 'predikant' | 'moderator' | 'eksterne_gebruiker')[];
   excludeRoles?: string[];
   isSection?: boolean;
   sectionLabel?: string;
@@ -70,55 +72,62 @@ const shouldSeeGemeente = (rol: string): boolean => {
 
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Paneelbord', icon: <LayoutDashboard className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'] },
+
+  // THREE PILLARS
+  { id: 'worship-hub', label: 'Reis & Aanbidding', icon: <Church className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'community-hub', label: 'Gemeenskap & Sorg', icon: <Users className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'stewardship-hub', label: 'Bestuur & Rentmeesterskap', icon: <Heart className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+
+  // PERSONAL & INFO
+  { id: 'profiel', label: 'My Profiel', icon: <User className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'], sectionLabel: 'Persoonlik' },
+  { id: 'my-dokumente', label: 'My Dokumente', icon: <FolderOpen className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'my-sertifikate', label: 'My Sertifikate', icon: <Award className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'boodskappe', label: 'Boodskappe', icon: <Mail className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+
+  // SERVICE TOOLS (Expanded for Leaders)
   {
     id: 'my-wyk',
-    label: 'My Wyk',
-    dynamicLabel: (rol: string) => shouldSeeGemeente(rol) ? 'Gemeente' : 'My Wyk',
+    label: 'My Wyk / Gemeente',
     icon: <Users className="w-5 h-5" />,
-    roles: ['leier', 'admin', 'hoof_admin']
+    roles: ['leier', 'admin', 'hoof_admin'],
+    sectionLabel: 'Diensgereedskap'
   },
-  { id: 'gemeente-kaart', label: 'Gemeente Kaart', icon: <Map className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'denominasie-kaart', label: 'Alle gemeentes', icon: <Globe className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'konsistorieboek', label: 'Konsistorieboek', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier', 'lidmaat'] },
-  { id: 'wyk-toewysing', label: 'Wyk Toewysing', icon: <MapPin className="w-5 h-5" />, roles: ['admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier', 'hoof_admin'] },
-  { id: 'besoekpunt-toewysing', label: 'Besoekpunt Toewysing', icon: <Home className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
-  { id: 'erediens-info', label: 'Erediens Info', icon: <Church className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
-  { id: 'nuusbrief', label: 'Nuusbrief', icon: <Newspaper className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
-  { id: 'dokumente', label: 'Dokumente Bestuur', icon: <FileText className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
-  { id: 'my-dokumente', label: 'My Dokumente', icon: <FolderOpen className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'oordrag', label: 'Lidmaatskap Oordrag', icon: <ArrowRightLeft className="w-5 h-5" />, roles: ['lidmaat', 'admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
-  { id: 'profiel', label: 'My Profiel', icon: <User className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'] },
-  { id: 'boodskappe', label: 'Boodskappe', icon: <Mail className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'betaling', label: 'Betalings', icon: <CreditCard className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'bybelkennis', label: 'Bybelkennis', icon: <BookOpenCheck className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'], sectionLabel: 'Leer & Groei' },
-  { id: 'geloofsgroei', label: 'Geloofsgroei', icon: <GraduationCap className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'sakramentsbeloftes', label: 'Sakramentsbeloftes', icon: <Baby className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'kort-kragtig', label: 'Kort & Kragtig', icon: <Zap className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'geloofsonderrig', label: 'Geloofsonderrig', icon: <BookOpen className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-
-  { id: 'vbo', label: 'VBO Krediete', icon: <Award className="w-5 h-5" />, roles: ['predikant', 'moderator', 'hoof_admin'] },
-  { id: 'advertensies', label: 'Advertensies', icon: <Megaphone className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'gawes-soek', label: 'Gawes Soek', icon: <Sparkles className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
   { id: 'pastorale-aksie', label: 'Pastorale Aksies', icon: <Heart className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin'] },
-  { id: 'missionale-bediening', label: 'Missionale Bediening', icon: <Sparkles className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'krisis', label: 'Krisisverslae', icon: <AlertTriangle className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin', 'predikant'] },
-  { id: 'krisis-bestuur', label: 'Krisisbestuur', icon: <Shield className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin', 'predikant'] },
-  { id: 'bedieningsbehoeftes', label: 'Bedieningsbehoeftes', icon: <Handshake className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin', 'predikant'], excludeRoles: ['lidmaat'] },
+  { id: 'krisis', label: 'Krisisverslae', icon: <AlertTriangle className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin'] },
+  { id: 'vbo', label: 'VBO Krediete', icon: <Award className="w-5 h-5" />, roles: ['predikant', 'moderator', 'hoof_admin'] },
+  { id: 'konsistorieboek', label: 'Konsistorieboek', icon: <BookOpen className="w-5 h-5" />, roles: ['leier', 'admin', 'hoof_admin'] },
+
+  // CORE FEATURES (Accessible via Hubs/Dynamic Menu but plumbed here)
+  { id: 'geloofsonderrig', label: 'Geloofsonderrig', icon: <GraduationCap className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'bybelkennis', label: 'Bybelkennis', icon: <BookOpenCheck className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'erediens-info', label: 'Erediens Inligting', icon: <Music className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'nuusbrief', label: 'Nuusbriewe', icon: <Newspaper className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
   { id: 'program', label: 'Gemeenteprogram', icon: <Calendar className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'vrae', label: 'Vrae & Versoeke', icon: <HelpCircle className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'artikel-portaal', label: 'Artikels-portaal', icon: <FileText className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'predikant'] },
-  { id: 'redaksie-portaal', label: 'Redaksie-portaal', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'moderator', 'predikant'] },
-  { id: 'verhoudings', label: 'Verhoudings', icon: <Heart className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'] },
-  { id: 'kuberkermis', label: 'Kuberkermis', icon: <ShoppingBag className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'] },
-  { id: 'vanlyn-bestuur', label: 'Van-lyn-af Bestuur', icon: <HardDrive className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'hulp-tutoriale', label: 'Gebruiksaanwysings', icon: <BookOpenCheck className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'eksterne_gebruiker'] },
-  { id: 'musiek', label: 'Musiek', icon: <Music className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
-  { id: 'omsendbrief-kletsbot', label: 'Omsendbrief Kletsbot', icon: <MessageCircle className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'], sectionLabel: 'Meer' },
-  { id: 'admin', label: 'Administrasie', icon: <Settings className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant'], excludeRoles: ['ouderling', 'diaken', 'groepleier'] },
+  { id: 'vrae', label: 'Vrae & Antwoorde', icon: <HelpCircle className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'advertensies', label: 'Gemeenskapskunde', icon: <ShoppingBag className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'kort-kragtig', label: 'Kort-Kragtig', icon: <Zap className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'denominasie-kaart', label: 'Denominasie Kaart', icon: <Globe className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+  { id: 'gemeente-kaart', label: 'Gemeente Kaart', icon: <MapPin className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin'] },
+
+  // ADMIN
+  { id: 'admin', label: 'Administrasie', icon: <Settings className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'predikant', 'subadmin'], excludeRoles: ['ouderling', 'diaken', 'groepleier'], sectionLabel: 'Bestuur' },
+  { id: 'hoof-admin-dashboard', label: 'Sinodale Dashboard', icon: <Crown className="w-5 h-5" />, roles: ['hoof_admin', 'subadmin'] },
+  { id: 'wyk-toewysing', label: 'Wyk Toewysing', icon: <Map className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'subadmin'] },
+  { id: 'verhoudings', label: 'Lidmaat Verhoudings', icon: <Handshake className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'subadmin'] },
+  { id: 'dokumente', label: 'Dokumentebestuur', icon: <FolderOpen className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'subadmin'] },
+
+  // HIDDEN/SYSTEM VIEWS (Only for dynamic menu resolution)
+  { id: 'lms-bestuur', label: 'LMS Bestuur', icon: <Laptop className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'subadmin'] },
+  { id: 'kuberkermis', label: 'Kuberkermis', icon: <ShoppingBag className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'subadmin'] },
+  { id: 'oordrag', label: 'Oordragte', icon: <ArrowRightLeft className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'subadmin'] },
+  { id: 'missionale-bediening', label: 'Missionale Bediening', icon: <Globe className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'subadmin'] },
+  { id: 'sakramentsbeloftes', label: 'Sakramentsbeloftes', icon: <Baby className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'subadmin'] },
+  { id: 'vanlyn-bestuur', label: 'Vanlyn Bestuur', icon: <CloudOff className="w-5 h-5" />, roles: ['lidmaat', 'leier', 'admin', 'hoof_admin', 'subadmin'] },
+  { id: 'redaksie-portaal', label: 'Redaksie Portaal', icon: <Newspaper className="w-5 h-5" />, roles: ['admin', 'hoof_admin', 'subadmin'] },
 ];
 
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, className = "" }) => {
   const { currentUser, currentView, setCurrentView, setCurrentGemeente, krisisse, vrae, currentGemeente } = useNHKA();
   const [dynamicMenu, setDynamicMenu] = React.useState<any[] | null>(null);
   const [openCategories, setOpenCategories] = React.useState<Record<string, boolean>>({});
@@ -293,30 +302,41 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     const viewId = getViewId(itemRef.id);
     const config = navItems.find(n => n.id === viewId || n.id === itemRef.id);
 
-    // If it's a category, render differently
     if (itemRef.type === 'category') {
       const isOpen = openCategories[itemRef.id];
       return (
-        <div key={itemRef.id} className="mb-2">
+        <div key={itemRef.id} className="mb-4">
           <button
             onClick={() => toggleCategory(itemRef.id)}
-            className="w-full flex items-center justify-between px-4 py-2 text-[10px] font-black bg-[#001a35] text-white uppercase tracking-wider rounded-lg mb-1 mt-4 first:mt-0 shadow-sm"
+            className="w-full flex items-center justify-between px-4 py-2 text-xs font-bold font-serif text-primary/40 uppercase tracking-[0.2em] mb-2 mt-6 first:mt-0"
           >
             {itemRef.label}
-            <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            <motion.div
+              animate={{ rotate: isOpen ? 180 : 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <ChevronDown className="w-3 h-3" />
+            </motion.div>
           </button>
-          {isOpen && itemRef.children && (
-            <div className="space-y-1 mt-1">
-              {itemRef.children.map((child: any) => renderMenuItem(child))}
-            </div>
-          )}
+          <AnimatePresence>
+            {isOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="space-y-1.5 overflow-hidden border-l border-primary/5 ml-4"
+              >
+                {itemRef.children.map((child: any) => renderMenuItem(child))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       );
     }
 
     if (!config) return null;
 
-    // Apply role exclusions for dynamic menu
     if (config.excludeRoles && config.excludeRoles.includes(currentUser.rol)) return null;
     if (config.id === 'vbo' && !isPredikantUser && !isModeratorUser && !isHoofAdminUser) return null;
 
@@ -325,90 +345,145 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     const displayLabel = config.dynamicLabel ? config.dynamicLabel(currentUser.rol) : (itemRef.label || config.label);
 
     return (
-      <button
+      <motion.button
         key={config.id}
+        whileHover={{ x: 5 }}
+        whileTap={{ scale: 0.98 }}
         onClick={() => handleNavClick(config.id as AppView)}
-        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${isActive ? 'bg-[#002855] text-white shadow-lg' : 'text-gray-700 hover:bg-gray-100'}`}
+        className={`w-full group flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${isActive
+          ? 'bg-primary text-white sacred-shadow-lg'
+          : 'text-foreground/70 hover:bg-primary/[0.03] hover:text-primary'
+          }`}
       >
-        <div className="flex items-center gap-3 text-left flex-1 min-w-0">
-          <span className={`flex-shrink-0 ${isActive ? 'text-[#D4A84B]' : 'text-gray-500'}`}>{config.icon}</span>
-          <span className="font-medium text-left leading-tight">{displayLabel}</span>
+        <div className="flex items-center gap-4 text-left flex-1 min-w-0">
+          <span className={`transition-colors duration-300 ${isActive ? 'text-accent' : 'text-foreground/30 group-hover:text-primary'
+            }`}>
+            {React.isValidElement(config.icon)
+              ? React.cloneElement(config.icon as React.ReactElement, { className: "w-5 h-5" })
+              : config.icon}
+          </span>
+          <span className={`text-sm tracking-wide transition-all duration-300 ${isActive ? 'font-bold' : 'font-medium'
+            }`}>
+            {displayLabel}
+          </span>
         </div>
         {badge > 0 && (
-          <span className={`flex-shrink-0 ml-2 px-2 py-0.5 text-xs font-bold rounded-full ${isActive ? 'bg-[#D4A84B] text-[#002855]' : 'bg-[#9E2A2B] text-white'}`}>
+          <span className={`flex-shrink-0 ml-2 px-2.5 py-1 text-[10px] font-black rounded-full shadow-sm ${isActive ? 'bg-accent text-primary' : 'bg-destructive text-white'
+            }`}>
             {badge}
           </span>
         )}
-      </button>
+      </motion.button>
     );
   };
 
   return (
     <>
-      {isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />
-      )}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-40 lg:hidden"
+            onClick={onClose}
+          />
+        )}
+      </AnimatePresence>
 
-      <aside className={`fixed top-0 left-0 h-full w-72 bg-white shadow-xl z-50 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:z-0 flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="lg:hidden flex justify-between items-center p-4 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Church className="w-6 h-6 text-[#002855]" />
-            <span className="font-bold text-[#002855]">Navigasie</span>
+      <aside className={`
+        fixed top-0 left-0 h-full w-72 z-50 transition-all duration-500
+        glass-panel border-r border-primary/5 flex flex-col sacred-shadow
+        lg:static lg:z-0 lg:translate-x-0
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${className}
+      `}>
+        {/* Mobile Header */}
+        <div className="lg:hidden flex justify-between items-center p-6 border-b border-primary/5 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center sacred-shadow-lg">
+              <Church className="w-5 h-5 text-accent" />
+            </div>
+            <span className="font-serif font-black text-primary tracking-tight">NAVIGASIE</span>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-            <X className="w-5 h-5 text-gray-500" />
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-primary/5 transition-colors">
+            <X className="w-5 h-5 text-primary" />
           </button>
         </div>
 
         {isHoofAdminUser && currentGemeente && (
-          <div className="p-4 border-b border-gray-100 flex-shrink-0">
-            <button onClick={handleBackToHoofAdmin} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#D4A84B]/10 text-[#D4A84B] hover:bg-[#D4A84B]/20 transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-              <div className="text-left">
-                <span className="font-medium block">Terug na Hoof Admin</span>
-                <span className="text-xs text-[#D4A84B]/70">Alle Gemeentes</span>
+          <div className="p-6 border-b border-primary/5 flex-shrink-0">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleBackToHoofAdmin}
+              className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-accent-foreground/5 text-accent-foreground hover:bg-accent-foreground/10 transition-colors border border-accent/20"
+            >
+              <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+                <ArrowLeft className="w-5 h-5 text-accent-foreground" />
               </div>
-            </button>
+              <div className="text-left">
+                <span className="font-bold text-sm block uppercase tracking-tight">Terug na Sinode</span>
+                <span className="text-[10px] text-accent-foreground/50 font-black tracking-widest uppercase">Admin Beheer</span>
+              </div>
+            </motion.button>
           </div>
         )}
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-6 space-y-1 overflow-y-auto custom-scrollbar">
           {renderedMenu ? (
-            // Dynamic Menu Rendering (Grouped)
             renderedMenu.map((item) => renderMenuItem(item))
           ) : (
-            // Static Fallback Filtering
             filteredItems.map((item) => {
               const badge = getBadge(item.id);
               const isActive = currentView === item.id;
               const displayLabel = item.dynamicLabel ? item.dynamicLabel(currentUser.rol) : item.label;
 
               return (
-                <button
+                <motion.button
                   key={item.id}
+                  whileHover={{ x: 5 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${isActive ? 'bg-[#002855] text-white shadow-lg' : 'text-gray-700 hover:bg-gray-100'}`}
+                  className={`w-full group flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 ${isActive
+                    ? 'bg-primary text-white sacred-shadow-lg'
+                    : 'text-foreground/70 hover:bg-primary/[0.03] hover:text-primary'
+                    }`}
                 >
-                  <div className="flex items-center gap-3 text-left flex-1 min-w-0">
-                    <span className={`flex-shrink-0 ${isActive ? 'text-[#D4A84B]' : 'text-gray-500'}`}>{item.icon}</span>
-                    <span className="font-medium text-left leading-tight">{displayLabel}</span>
+                  <div className="flex items-center gap-4 text-left flex-1 min-w-0">
+                    <span className={`transition-colors duration-300 ${isActive ? 'text-accent' : 'text-foreground/30 group-hover:text-primary'
+                      }`}>
+                      {React.isValidElement(item.icon)
+                        ? React.cloneElement(item.icon as React.ReactElement, { className: "w-5 h-5" })
+                        : item.icon}
+                    </span>
+                    <span className={`text-sm tracking-wide transition-all duration-300 ${isActive ? 'font-bold' : 'font-medium'
+                      }`}>
+                      {displayLabel}
+                    </span>
                   </div>
                   {badge > 0 && (
-                    <span className={`flex-shrink-0 ml-2 px-2 py-0.5 text-xs font-bold rounded-full ${isActive ? 'bg-[#D4A84B] text-[#002855]' : 'bg-[#9E2A2B] text-white'}`}>
+                    <span className={`flex-shrink-0 ml-2 px-2.5 py-1 text-[10px] font-black rounded-full shadow-sm ${isActive ? 'bg-accent text-primary' : 'bg-destructive text-white'
+                      }`}>
                       {badge}
                     </span>
                   )}
-                </button>
+                </motion.button>
               );
             })
           )}
         </nav>
 
-
-        <div className="flex-shrink-0 p-4 border-t border-gray-100">
-          <div className="bg-[#8B7CB3]/10 rounded-xl p-4 border border-[#8B7CB3]/20">
-            <p className="text-sm text-[#8B7CB3] italic leading-relaxed">"Dra mekaar se laste en vervul so die wet van Christus."</p>
-            <p className="text-xs text-[#8B7CB3]/70 mt-2 font-medium">— Galasiërs 6:2</p>
+        <div className="flex-shrink-0 p-8 pt-0 mt-auto">
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-accent/20 to-primary/20 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
+            <div className="relative bg-white/50 backdrop-blur-sm rounded-2xl p-6 border border-primary/5 text-center">
+              <p className="text-[11px] font-serif font-medium leading-relaxed italic text-primary/70">
+                "Dra mekaar se laste en vervul so die wet van Christus."
+              </p>
+              <div className="h-px w-8 bg-accent/30 mx-auto my-3" />
+              <p className="text-[9px] font-black tracking-[0.2em] text-accent-foreground/40 uppercase">Galasiërs 6:2</p>
+            </div>
           </div>
         </div>
       </aside>

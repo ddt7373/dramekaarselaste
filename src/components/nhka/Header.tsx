@@ -4,6 +4,7 @@ import { useOffline } from '@/contexts/OfflineContext';
 import { supabase } from '@/lib/supabase';
 import { getRolLabel, isHoofAdmin, isAdmin, isLeier, getLidmaatDisplayNaam } from '@/types/nhka';
 import {
+  ArrowLeft,
   Menu,
   Bell,
   LogOut,
@@ -34,7 +35,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
-  const { currentUser, currentGemeente, logout, krisisse, setCurrentView } = useNHKA();
+  const { currentUser, currentGemeente, logout, krisisse, setCurrentView, currentView, goBack } = useNHKA();
   const { isOnline, pendingCount, failedCount, conflictCount, syncStatus, syncNow } = useOffline();
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -106,47 +107,48 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
   };
 
   return (
-    <header className="bg-[#002855] text-white sticky top-0 z-50 shadow-lg">
+    <header className="bg-primary text-white sticky top-0 z-50 shadow-xl border-b border-white/5 backdrop-blur-md bg-primary/95">
       <div className="px-2 sm:px-4">
         <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Left: Menu & Logo */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
-            {/* Meer Button - meer kompak */}
-            <button
-              onClick={onMenuToggle}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg bg-[#D4A84B] hover:bg-[#c49a3d] text-[#002855] font-semibold transition-colors lg:hidden shadow-md flex-shrink-0"
-              aria-label="Toggle menu"
-            >
-              <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-xs sm:text-sm">Meer</span>
-              <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
-            </button>
+          <div className="flex items-center gap-1 sm:gap-4 min-w-0 flex-shrink-0">
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* Terug Button - net as ons nie op dashboard is nie */}
+              {currentView !== 'dashboard' && currentView !== 'gemeente-select' && currentView !== 'login' && (
+                <button
+                  onClick={goBack}
+                  className="flex items-center justify-center p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all hover:scale-105 active:scale-95 flex-shrink-0 sacred-shadow shadow-sm"
+                  title="Gaan Terug"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
 
-            {/* Inligting Button */}
-            <a
-              href="/info.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex-shrink-0"
-              title="Inligting oor die app"
-            >
-              <Info className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-xs sm:text-sm font-medium hidden sm:inline">Inligting</span>
-            </a>
+              {/* Meer Button - meer kompak */}
+              <button
+                onClick={onMenuToggle}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent hover:bg-accent/90 text-primary font-bold transition-all hover:scale-105 active:scale-95 lg:hidden sacred-shadow flex-shrink-0"
+                aria-label="Toggle menu"
+              >
+                <Menu className="w-5 h-5" />
+                <span className="text-xs font-black uppercase tracking-widest hidden xs:block">Menu</span>
+              </button>
+            </div>
+
+            <div className="h-8 w-px bg-white/10 mx-1 hidden sm:block" />
 
             {/* Logo en Naam */}
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white p-0.5 sm:p-1 shadow-md flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-white p-1 shadow-lg flex-shrink-0 animate-in zoom-in duration-500">
                 <img
                   src={currentGemeente?.logo_url || LOGO_URL}
                   alt="Logo"
                   className="w-full h-full rounded-full object-contain"
                 />
               </div>
-              {/* Versteek teks op baie klein skerms */}
-              <div className="hidden xs:block sm:block min-w-0">
-                <h1 className="font-bold text-sm sm:text-lg leading-tight truncate">Dra Mekaar</h1>
-                <p className="text-[10px] sm:text-xs text-[#D4A84B] leading-tight truncate">
+              <div className="hidden xs:block min-w-0">
+                <h1 className="font-serif font-black text-sm sm:text-lg leading-none tracking-tight truncate uppercase">Dra Mekaar</h1>
+                <p className="text-[10px] sm:text-xs text-accent font-bold leading-none truncate mt-1 opacity-80">
                   {currentGemeente?.naam || 'NHKA'}
                 </p>
               </div>
