@@ -1455,6 +1455,16 @@ export interface Graad {
   updated_at: string;
 }
 
+export interface GeloofsonderrigKurrikulum {
+  id: string;
+  titel: string;
+  beskrywing?: string;
+  volgorde: number;
+  aktief: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GeloofsonderrigOnderwerp {
   id: string;
   titel: string;
@@ -1463,6 +1473,7 @@ export interface GeloofsonderrigOnderwerp {
   kleur: string;
   volgorde: number;
   graad_id?: string;
+  kurrikulum_id?: string;
   aktief: boolean;
 }
 

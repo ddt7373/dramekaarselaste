@@ -440,7 +440,19 @@ const Geloofsonderrig: React.FC = () => {
   const [mentorView, setMentorView] = useState<MentorView>('dashboard');
   const [leerderView, setLeerderView] = useState<LeerderView>('onderwerpe');
 
+  
+  
+  const fetchKurrikulums = async () => {
+    try {
+      const { data } = await supabase.from('geloofsonderrig_kurrikulums').select('*').eq('aktief', true).order('volgorde');
+      setKurrikulums(data || []);
+    } catch (e) { console.error('Error fetching kurrikulums:', e); }
+  };
+
   const [grades, setGrades] = useState<Graad[]>([]);
+  const [kurrikulums, setKurrikulums] = useState<any[]>([]);
+  const [selectedKurrikulumId, setSelectedKurrikulumId] = useState<string | 'almal'>('almal');
+
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
 
   const [onderwerpe, setOnderwerpe] = useState<GeloofsonderrigOnderwerp[]>([]);
@@ -2279,7 +2291,12 @@ const Geloofsonderrig: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {onderwerpe.map(o => (
+        
+        {(selectedKurrikulumId === 'almal' 
+          ? onderwerpe 
+          : onderwerpe.filter(o => o.kurrikulum_id === selectedKurrikulumId || (!o.kurrikulum_id && selectedKurrikulumId === 'none'))
+         ).map(o => (
+
           <Card key={o.id} className="cursor-pointer hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 border-2 border-transparent hover:border-purple-400 bg-gradient-to-br from-white to-purple-50/50 shadow-lg" onClick={() => { setSelectedOnderwerp(o); fetchLesse(o.id); }}>
             <CardContent className="p-6">
               <div className="flex items-start gap-4">

@@ -364,7 +364,7 @@ const HoofAdminDashboard: React.FC = () => {
   const [selectedOnderwerp, setSelectedOnderwerp] = useState<string>('');
   const [lessonUploadLoading, setLessonUploadLoading] = useState(false);
   const [creatingTopic, setCreatingTopic] = useState(false);
-  const [newTopic, setNewTopic] = useState({ titel: '', beskrywing: '', graad_id: '', ikoon: 'BookOpen' });
+  const [newTopic, setNewTopic] = useState({ titel: '', beskrywing: '', graad_id: '', kurrikulum_id: '', ikoon: 'BookOpen' });
   const lessonFileInputRef = useRef<HTMLInputElement>(null);
 
   // Manual Lesson Creation State
@@ -395,14 +395,59 @@ const HoofAdminDashboard: React.FC = () => {
   const [showAddGrade, setShowAddGrade] = useState(false);
   const [addingGrade, setAddingGrade] = useState(false);
   const [savingTopic, setSavingTopic] = useState(false);
+  const [showCreateKurrikulum, setShowCreateKurrikulum] = useState(false);
+  const [kurrikulums, setKurrikulums] = useState<any[]>([]);
+  const [newKurrikulumName, setNewKurrikulumName] = useState('');
+  const [newKurrikulumDesc, setNewKurrikulumDesc] = useState('');
+  const [addingKurrikulum, setAddingKurrikulum] = useState(false);
 
   useEffect(() => {
-    if (showLessonUpload || showCreateTopic || showManualLessonCreate || showLesseBestuur) {
+    if (showLessonUpload || showCreateTopic || showManualLessonCreate || showLesseBestuur || showCreateKurrikulum) {
+      fetchKurrikulums();
       fetchOnderwerpe();
       fetchGrades();
       if (showLesseBestuur) fetchAlleLesse();
     }
-  }, [showLessonUpload, showCreateTopic, showManualLessonCreate, showLesseBestuur]);
+  }, [showLessonUpload, showCreateTopic, showManualLessonCreate, showLesseBestuur, showCreateKurrikulum]);
+
+
+  const fetchKurrikulums = async () => {
+    try {
+      const { data, error } = await supabase.from('geloofsonderrig_kurrikulums').select('*').eq('aktief', true).order('volgorde');
+      setKurrikulums(data || []);
+    } catch (error) { console.error('Error fetching kurrikulums:', error); }
+  };
+
+  const handleCreateKurrikulum = async () => {
+    if (!newKurrikulumName.trim()) return;
+    setAddingKurrikulum(true);
+    try {
+      const { data: maxOrderData } = await supabase.from('geloofsonderrig_kurrikulums')
+        .select('volgorde')
+        .order('volgorde', { ascending: false })
+        .limit(1)
+        .single();
+      const nextOrder = (maxOrderData?.volgorde || 0) + 1;
+      const { data, error } = await supabase.from('geloofsonderrig_kurrikulums').insert({
+        titel: newKurrikulumName.trim(),
+        beskrywing: newKurrikulumDesc.trim(),
+        volgorde: nextOrder,
+        aktief: true
+      }).select().single();
+      if (error) throw error;
+      toast.success(`'${newKurrikulumName}' bygevoeg!`);
+      await fetchKurrikulums();
+      if (showCreateTopic) setNewTopic({ ...newTopic, kurrikulum_id: data.id });
+      if (showEditTopic && editingTopic) setEditingTopic({ ...editingTopic, kurrikulum_id: data.id });
+      setNewKurrikulumName('');
+      setNewKurrikulumDesc('');
+      setShowCreateKurrikulum(false);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setAddingKurrikulum(false);
+    }
+  };
 
   const fetchGrades = async () => {
     try {
@@ -561,6 +606,7 @@ const HoofAdminDashboard: React.FC = () => {
         titel: newTopic.titel,
         beskrywing: newTopic.beskrywing,
         graad_id: newTopic.graad_id,
+        kurrikulum_id: newTopic.kurrikulum_id || null,
         ikoon: newTopic.ikoon,
         volgorde: nextOrder,
         aktief: true,
@@ -632,6 +678,7 @@ const HoofAdminDashboard: React.FC = () => {
           titel: editingTopic.titel,
           beskrywing: editingTopic.beskrywing,
           graad_id: editingTopic.graad_id,
+          kurrikulum_id: editingTopic.kurrikulum_id || null,
           ikoon: editingTopic.ikoon
         })
         .eq('id', editingTopic.id);
@@ -1474,12 +1521,20 @@ const HoofAdminDashboard: React.FC = () => {
                   <p className="text-xs md:text-sm text-gray-500">Kyk, wysig of verwyder</p>
                 </div>
               </button>
-              <button
-                onClick={() => setShowCreateTopic(true)}
-                className="text-xs text-blue-600 hover:underline text-center"
-              >
-                + Skep Nuwe Onderwerp
-              </button>
+              <div className="flex gap-4 w-full justify-center">
+                <button
+                  onClick={() => setShowCreateTopic(true)}
+                  className="text-xs text-blue-600 hover:underline text-center"
+                >
+                  + Skep Onderwerp
+                </button>
+                <button
+                  onClick={() => setShowCreateKurrikulum(true)}
+                  className="text-xs text-blue-600 hover:underline text-center"
+                >
+                  + Skep Kurrikulum
+                </button>
+              </div>
             </div>)}
 
             {hasPerm('hoof_admin_bestuur') && (<button
@@ -2715,6 +2770,64 @@ const HoofAdminDashboard: React.FC = () => {
       )}
 
 
+
+      {/* Create Kurrikulum Modal */}
+      {showCreateKurrikulum && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-[#002855]">Skep Nuwe Kurrikulum</h2>
+              <button onClick={() => setShowCreateKurrikulum(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-6">
+              Voeg 'n nuwe kurrikulum by om lesse te groepeer (bv. "Met Hart en Hand" of "Lewende Geloof").
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Naam *</label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-gray-300 p-2 focus:border-[#D4A84B] focus:ring-1 focus:ring-[#D4A84B] outline-none"
+                  value={newKurrikulumName}
+                  onChange={(e) => setNewKurrikulumName(e.target.value)}
+                  placeholder="Bv. Lewende Geloof"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Beskrywing (Opsioneel)</label>
+                <textarea
+                  className="w-full rounded-md border border-gray-300 p-2 focus:border-[#D4A84B] focus:ring-1 focus:ring-[#D4A84B] outline-none"
+                  value={newKurrikulumDesc}
+                  onChange={(e) => setNewKurrikulumDesc(e.target.value)}
+                  placeholder="Kort beskrywing van hierdie kurrikulum"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowCreateKurrikulum(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Kanselleer
+              </button>
+              <button
+                onClick={handleCreateKurrikulum}
+                disabled={addingKurrikulum || !newKurrikulumName.trim()}
+                className="px-4 py-2 bg-[#002855] text-white rounded-lg hover:bg-[#001a3d] disabled:opacity-50 flex items-center transition-colors"
+              >
+                {addingKurrikulum ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Stoor...</> : 'Stoor'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Topic Modal */}
       {showCreateTopic && (
