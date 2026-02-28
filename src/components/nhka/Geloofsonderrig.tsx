@@ -2192,6 +2192,23 @@ const Geloofsonderrig: React.FC = () => {
         <div><h2 className="text-2xl font-bold">{t.learner.topics}</h2><p className="text-gray-600">{t.learner.topicsDesc}</p></div>
       </div>
 
+      {kurrikulums.length > 0 && (
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+          <p className="font-semibold text-gray-700 min-w-[120px]">Kies Kurrikulum:</p>
+          <Select value={selectedKurrikulumId} onValueChange={setSelectedKurrikulumId}>
+            <SelectTrigger className="w-full md:w-[300px] border-2 border-purple-200 focus:ring-purple-500 rounded-lg">
+              <SelectValue placeholder="Kies 'n kurrikulum" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="almal" className="font-medium text-purple-700">Alle Lesse {kurrikulums.length > 0 ? '(Groepeer nie)' : ''}</SelectItem>
+              {kurrikulums.map(k => (
+                <SelectItem key={k.id} value={k.id}>{k.titel}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Vooraf blok: 1 gratis les, daarna R100 (behalve Demo Leerder) */}
       {currentGemeente && !currentGemeente.is_demo && (
         <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg mb-4">
