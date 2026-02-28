@@ -426,7 +426,7 @@ const HoofAdminDashboard: React.FC = () => {
         .select('volgorde')
         .order('volgorde', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       const nextOrder = (maxOrderData?.volgorde || 0) + 1;
       const { data, error } = await supabase.from('geloofsonderrig_kurrikulums').insert({
         titel: newKurrikulumName.trim(),
@@ -598,7 +598,7 @@ const HoofAdminDashboard: React.FC = () => {
         .eq('graad_id', newTopic.graad_id)
         .order('volgorde', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const nextOrder = (maxOrderData?.volgorde || 0) + 1;
 
@@ -633,7 +633,7 @@ const HoofAdminDashboard: React.FC = () => {
         .select('volgorde')
         .order('volgorde', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const nextOrder = (maxOrderData?.volgorde || 0) + 1;
 
